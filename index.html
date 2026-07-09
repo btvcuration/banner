@@ -4,11 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>B tv 편성 Admin 시스템</title>
+  
+  <!-- Favicon 404 에러 방지 -->
+  <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/feather-icons"></script>
+  
   <style>
     body { font-family: 'Pretendard', 'Malgun Gothic', sans-serif; background-color: #f8f9fa; }
     .sidebar-item.active { background-color: #fce8e6; color: #d93025; border-right: 3px solid #d93025; font-weight: 700; }
@@ -21,7 +26,6 @@
   </style>
 </head>
 <body class="text-gray-800 antialiased h-screen flex overflow-hidden">
-
   <div id="root" class="w-full h-full flex"></div>
 
   <script type="text/babel">
@@ -44,6 +48,17 @@
       }
     };
 
+    // React와 충돌하지 않는 Feather Icon 전용 컴포넌트
+    const FeatherIcon = ({ name, className }) => {
+      if (!window.feather || !window.feather.icons[name]) return null;
+      return (
+        <span 
+          className={`inline-flex items-center justify-center ${className || ''}`}
+          dangerouslySetInnerHTML={{ __html: window.feather.icons[name].toSvg({ class: className }) }} 
+        />
+      );
+    };
+
     function App() {
       const [currentView, setCurrentView] = React.useState('request'); 
       const [requests, setRequests] = React.useState([]);
@@ -51,21 +66,26 @@
       const [schedules, setSchedules] = React.useState([]);
       const [loading, setLoading] = React.useState(false);
 
-      React.useEffect(() => { feather.replace(); }, [currentView, requests, approved, schedules]);
-
-      const fetchData = async (action, setData) => {
+      // 데이터 전체 동기화 함수 (병렬 처리로 속도 개선)
+      const syncAllData = async () => {
         setLoading(true);
         try {
-          const response = await fetch(`${API_URL}?action=${action}`);
-          const json = await response.json();
-          setData(json);
-        } catch (error) { console.error(`데이터 로드 실패: ${error}`); }
-        setLoading(false);
+          const [reqRes, appRes] = await Promise.all([
+            fetch(`${API_URL}?action=getRequests`).then(r => r.json()),
+            fetch(`${API_URL}?action=getApproved`).then(r => r.json())
+          ]);
+          setRequests(reqRes);
+          setApproved(appRes);
+        } catch (error) { 
+          console.error(`데이터 로드 실패: ${error}`); 
+          alert("데이터를 불러오는 중 오류가 발생했습니다.");
+        } finally {
+          setLoading(false);
+        }
       };
 
       React.useEffect(() => {
-        fetchData('getRequests', setRequests);
-        fetchData('getApproved', setApproved);
+        syncAllData();
       }, []);
 
       const Sidebar = () => (
@@ -79,19 +99,19 @@
           </div>
           <nav className="flex-1 py-4 flex flex-col gap-1">
             <a href="#request" onClick={(e) => {e.preventDefault(); setCurrentView('request');}} className={`sidebar-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-gray-600 ${currentView === 'request' ? 'active' : ''}`}>
-              <i data-feather="edit-3" className="w-4 h-4"></i> 편성 요청 (신규)
+              <FeatherIcon name="edit-3" className="w-4 h-4" /> 편성 요청 (신규)
             </a>
             <a href="#approval" onClick={(e) => {e.preventDefault(); setCurrentView('approval');}} className={`sidebar-item flex items-center justify-between px-6 py-3 text-sm font-medium text-gray-600 ${currentView === 'approval' ? 'active' : ''}`}>
-              <div className="flex items-center gap-3"><i data-feather="check-square" className="w-4 h-4"></i> 승인 대기열</div>
+              <div className="flex items-center gap-3"><FeatherIcon name="check-square" className="w-4 h-4" /> 승인 대기열</div>
               {requests.filter(r => r.상태 === '신규(요청)').length > 0 && (
                 <span className="bg-red-100 text-red-600 py-0.5 px-2 rounded-full text-xs font-bold">{requests.filter(r => r.상태 === '신규(요청)').length}</span>
               )}
             </a>
             <a href="#master" onClick={(e) => {e.preventDefault(); setCurrentView('master');}} className={`sidebar-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-gray-600 ${currentView === 'master' ? 'active' : ''}`}>
-              <i data-feather="database" className="w-4 h-4"></i> 마스터 원장
+              <FeatherIcon name="database" className="w-4 h-4" /> 마스터 원장
             </a>
             <a href="#schedule" onClick={(e) => {e.preventDefault(); setCurrentView('schedule');}} className={`sidebar-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-gray-600 ${currentView === 'schedule' ? 'active' : ''}`}>
-              <i data-feather="calendar" className="w-4 h-4"></i> 실편성 캘린더
+              <FeatherIcon name="calendar" className="w-4 h-4" /> 실편성 캘린더
             </a>
           </nav>
         </div>
@@ -106,8 +126,8 @@
             {currentView === 'schedule' && '📅 실편성 및 조율 캘린더'}
           </h2>
           <div className="flex items-center gap-6">
-            <button onClick={() => {fetchData('getRequests', setRequests); fetchData('getApproved', setApproved);}} className="text-sm font-bold text-gray-500 hover:text-blue-600 flex items-center gap-1">
-              <i data-feather="refresh-cw" className="w-4 h-4"></i> 데이터 동기화
+            <button onClick={syncAllData} disabled={loading} className="text-sm font-bold text-gray-500 hover:text-blue-600 flex items-center gap-1 disabled:opacity-50">
+              <FeatherIcon name="refresh-cw" className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> 데이터 동기화
             </button>
             <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden border border-gray-300">
               <img src="https://ui-avatars.com/api/?name=Admin&background=0D8ABC&color=fff" alt="Profile" />
@@ -132,7 +152,9 @@
           if (name === 'bannerType' && value === '미니EPG' && prev.epgTargetType === 'singleChannel') {
             updated.epgTargetType = 'channel';
           }
-          if (name === 'startDate' && !prev.endDate) updated.endDate = value;
+          if (name === 'startDate' && (!prev.endDate || prev.endDate < value)) {
+            updated.endDate = value;
+          }
           return updated;
         });
       };
@@ -151,7 +173,6 @@
           alert("편성 대분류와 배너 유형을 선택해주세요."); return;
         }
 
-        // 중복/경합 검사 로직
         const sDate = new Date(form.startDate);
         const eDate = new Date(form.endDate);
         const allData = [...requests, ...approved];
@@ -164,7 +185,7 @@
         if (overlaps.length > 0) {
           const overlapNames = overlaps.map(o => `[${o.이벤트명}]`).join(", ");
           const warningMsg = `⚠️ 주의: 선택하신 기간(${form.startDate} ~ ${form.endDate})에 동일한 배너 영역('${form.bannerType}')을 점유하는 일정이 이미 존재합니다.\n\n경합 대상: ${overlapNames}\n\n등록 시 알고리즘에 의해 일정이 조율될 수 있습니다. 계속하시겠습니까?`;
-          if(!confirm(warningMsg)) return;
+          if(!window.confirm(warningMsg)) return;
         }
 
         setLoading(true);
@@ -183,15 +204,22 @@
         };
 
         try {
-          const response = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'addRequest', payload }) });
+          const response = await fetch(API_URL, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ action: 'addRequest', payload }) 
+          });
           const res = await response.json();
           if (res.status === 'success') {
             alert('🚀 성공적으로 편성 요청이 등록되었습니다. [승인 대기열]을 확인하세요.');
             setForm({ gubun: '신규', manager: '', category: '', bannerType: '', epgTargetType: 'channel', targetChannels: [], targetDetail: '', oapTitle: '', eventName: '', startDate: '', endDate: '', landingType: '메뉴 바로가기 (1 depth)', landingDetail: '', jiraLink: '' });
-            fetchData('getRequests', setRequests);
+            syncAllData(); // 완료 후 데이터 리프레시
           }
-        } catch(e) { alert("오류 발생: " + e); }
-        setLoading(false);
+        } catch(e) { 
+          alert("오류 발생: API 서버 연결에 실패했습니다. " + e); 
+        } finally {
+          setLoading(false);
+        }
       };
 
       const renderRequestForm = () => (
@@ -201,150 +229,152 @@
               <h3 className="text-lg font-bold text-gray-800">편성 요청서 양식</h3>
               <span className="text-xs text-gray-500">* 표시는 필수 항목입니다.</span>
             </div>
-            <form onSubmit={submitRequest} className="p-6 space-y-6">
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">구분 <span className="text-red-500">*</span></label>
-                  <select name="gubun" value={form.gubun} onChange={handleFormChange} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-blue-500 focus:outline-none">
-                    <option value="신규">신규</option><option value="재편성">재편성</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">담당자 <span className="text-red-500">*</span></label>
-                  <input type="text" name="manager" value={form.manager} onChange={handleFormChange} required className="w-full border border-gray-300 rounded p-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="담당자 성함 입력"/>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-6 p-4 bg-blue-50/50 rounded-lg border border-blue-100">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">편성 대분류 <span className="text-red-500">*</span></label>
-                  <select name="category" value={form.category} onChange={handleFormChange} required className="w-full border border-gray-300 rounded p-2 text-sm">
-                    <option value="">-- 대분류 선택 --</option>
-                    {Object.keys(SYS_CONFIG.categories).map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">배너 유형 <span className="text-red-500">*</span></label>
-                  <select name="bannerType" value={form.bannerType} onChange={handleFormChange} required disabled={!form.category} className="w-full border border-gray-300 rounded p-2 text-sm disabled:bg-gray-100">
-                    <option value="">-- 배너 유형 선택 --</option>
-                    {form.category && SYS_CONFIG.categories[form.category].map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {(form.bannerType === '미니EPG' || form.bannerType === '일반채널 배너트리거') && (
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <label className="block text-sm font-bold text-gray-700 mb-3">미니 EPG / 일반채널 편성 대상 설정 <span className="text-red-500">*</span></label>
-                  <div className="flex gap-2 mb-4 bg-gray-100 p-1 rounded-lg">
-                    <label className="radio-tab flex-1 cursor-pointer">
-                      <input type="radio" name="epgTargetType" value="channel" checked={form.epgTargetType==='channel'} onChange={handleFormChange} className="hidden"/>
-                      <div className="text-center py-2 rounded text-sm text-gray-600 border border-transparent">그룹 채널 다중선택</div>
-                    </label>
-                    {form.bannerType !== '미니EPG' && (
-                      <label className="radio-tab flex-1 cursor-pointer">
-                        <input type="radio" name="epgTargetType" value="singleChannel" checked={form.epgTargetType==='singleChannel'} onChange={handleFormChange} className="hidden"/>
-                        <div className="text-center py-2 rounded text-sm text-gray-600 border border-transparent">단일 채널 다중선택</div>
-                      </label>
-                    )}
-                    <label className="radio-tab flex-1 cursor-pointer">
-                      <input type="radio" name="epgTargetType" value="program" checked={form.epgTargetType==='program'} onChange={handleFormChange} className="hidden"/>
-                      <div className="text-center py-2 rounded text-sm text-gray-600 border border-transparent">특정 프로그램 직접입력</div>
-                    </label>
+            
+            {/* Fieldset을 사용하여 로딩 중일 때 폼 전체 입력 방지 */}
+            <fieldset disabled={loading}>
+              <form onSubmit={submitRequest} className="p-6 space-y-6">
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">구분 <span className="text-red-500">*</span></label>
+                    <select name="gubun" value={form.gubun} onChange={handleFormChange} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-blue-500 focus:outline-none">
+                      <option value="신규">신규</option><option value="재편성">재편성</option>
+                    </select>
                   </div>
-
-                  {form.epgTargetType === 'channel' && (
-                    <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto border p-3 rounded bg-white">
-                      {SYS_CONFIG.channelGroups.map(ch => (
-                        <label key={ch} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-1">
-                          <input type="checkbox" value={ch} checked={form.targetChannels.includes(ch)} onChange={handleCheckbox} className="w-4 h-4 text-blue-600"/> {ch}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">담당자 <span className="text-red-500">*</span></label>
+                    <input type="text" name="manager" value={form.manager} onChange={handleFormChange} required className="w-full border border-gray-300 rounded p-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="담당자 성함 입력"/>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-6 p-4 bg-blue-50/50 rounded-lg border border-blue-100">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">편성 대분류 <span className="text-red-500">*</span></label>
+                    <select name="category" value={form.category} onChange={handleFormChange} required className="w-full border border-gray-300 rounded p-2 text-sm">
+                      <option value="">-- 대분류 선택 --</option>
+                      {Object.keys(SYS_CONFIG.categories).map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">배너 유형 <span className="text-red-500">*</span></label>
+                    <select name="bannerType" value={form.bannerType} onChange={handleFormChange} required disabled={!form.category} className="w-full border border-gray-300 rounded p-2 text-sm disabled:bg-gray-100">
+                      <option value="">-- 배너 유형 선택 --</option>
+                      {form.category && SYS_CONFIG.categories[form.category].map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {(form.bannerType === '미니EPG' || form.bannerType === '일반채널 배너트리거') && (
+                  <div className="border border-gray-200 rounded-lg p-4">
+                    <label className="block text-sm font-bold text-gray-700 mb-3">미니 EPG / 일반채널 편성 대상 설정 <span className="text-red-500">*</span></label>
+                    <div className="flex gap-2 mb-4 bg-gray-100 p-1 rounded-lg">
+                      <label className="radio-tab flex-1 cursor-pointer">
+                        <input type="radio" name="epgTargetType" value="channel" checked={form.epgTargetType==='channel'} onChange={handleFormChange} className="hidden"/>
+                        <div className="text-center py-2 rounded text-sm text-gray-600 border border-transparent">그룹 채널 다중선택</div>
+                      </label>
+                      {form.bannerType !== '미니EPG' && (
+                        <label className="radio-tab flex-1 cursor-pointer">
+                          <input type="radio" name="epgTargetType" value="singleChannel" checked={form.epgTargetType==='singleChannel'} onChange={handleFormChange} className="hidden"/>
+                          <div className="text-center py-2 rounded text-sm text-gray-600 border border-transparent">단일 채널 다중선택</div>
                         </label>
-                      ))}
+                      )}
+                      <label className="radio-tab flex-1 cursor-pointer">
+                        <input type="radio" name="epgTargetType" value="program" checked={form.epgTargetType==='program'} onChange={handleFormChange} className="hidden"/>
+                        <div className="text-center py-2 rounded text-sm text-gray-600 border border-transparent">특정 프로그램 직접입력</div>
+                      </label>
                     </div>
-                  )}
-                  {form.epgTargetType === 'singleChannel' && (
-                    <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto border p-3 rounded bg-white">
-                      {SYS_CONFIG.singleChannels.map(ch => (
-                        <label key={ch} className="flex items-center gap-2 text-sm cursor-pointer">
-                          <input type="checkbox" value={ch} checked={form.targetChannels.includes(ch)} onChange={handleCheckbox} className="w-4 h-4"/> {ch}번
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                  {form.epgTargetType === 'program' && (
-                    <input type="text" name="targetDetail" value={form.targetDetail} onChange={handleFormChange} className="w-full border rounded p-2 text-sm" placeholder="프로그램명을 정확히 기입해주세요."/>
-                  )}
-                </div>
-              )}
-
-              {form.bannerType === '가이드채널 배너트리거' && (
+                    {form.epgTargetType === 'channel' && (
+                      <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto border p-3 rounded bg-white">
+                        {SYS_CONFIG.channelGroups.map(ch => (
+                          <label key={ch} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-1">
+                            <input type="checkbox" value={ch} checked={form.targetChannels.includes(ch)} onChange={handleCheckbox} className="w-4 h-4 text-blue-600"/> {ch}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    {form.epgTargetType === 'singleChannel' && (
+                      <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto border p-3 rounded bg-white">
+                        {SYS_CONFIG.singleChannels.map(ch => (
+                          <label key={ch} className="flex items-center gap-2 text-sm cursor-pointer">
+                            <input type="checkbox" value={ch} checked={form.targetChannels.includes(ch)} onChange={handleCheckbox} className="w-4 h-4"/> {ch}번
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    {form.epgTargetType === 'program' && (
+                      <input type="text" name="targetDetail" value={form.targetDetail} onChange={handleFormChange} className="w-full border rounded p-2 text-sm" placeholder="프로그램명을 정확히 기입해주세요."/>
+                    )}
+                  </div>
+                )}
+                {form.bannerType === '가이드채널 배너트리거' && (
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">OAP 타이틀명 <span className="text-red-500">*</span></label>
+                    <input type="text" name="oapTitle" value={form.oapTitle} onChange={handleFormChange} required className="w-full border rounded p-2 text-sm" placeholder="예: OAP_여름특집_V1"/>
+                  </div>
+                )}
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">OAP 타이틀명 <span className="text-red-500">*</span></label>
-                  <input type="text" name="oapTitle" value={form.oapTitle} onChange={handleFormChange} required className="w-full border rounded p-2 text-sm" placeholder="예: OAP_여름특집_V1"/>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">이벤트 / 편성명 <span className="text-red-500">*</span></label>
-                <input type="text" name="eventName" value={form.eventName} onChange={handleFormChange} required className="w-full border border-gray-300 rounded p-2 text-sm" placeholder="예: 수요 1+1 무비쿠폰"/>
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">편성 기간 <span className="text-red-500">*</span></label>
-                <div className="flex items-center gap-2">
-                  <input type="date" name="startDate" value={form.startDate} onChange={handleFormChange} required className="flex-1 border rounded p-2 text-sm"/>
-                  <span className="text-gray-500">~</span>
-                  <input type="date" name="endDate" value={form.endDate} min={form.startDate} onChange={handleFormChange} required className="flex-1 border rounded p-2 text-sm"/>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">랜딩 유형 <span className="text-red-500">*</span></label>
-                  <select name="landingType" value={form.landingType} onChange={handleFormChange} className="w-full border rounded p-2 text-sm">
-                    {SYS_CONFIG.landingTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">이벤트 / 편성명 <span className="text-red-500">*</span></label>
+                  <input type="text" name="eventName" value={form.eventName} onChange={handleFormChange} required className="w-full border border-gray-300 rounded p-2 text-sm" placeholder="예: 수요 1+1 무비쿠폰"/>
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">랜딩 상세 내용</label>
-                  <input type="text" name="landingDetail" value={form.landingDetail} onChange={handleFormChange} className="w-full border rounded p-2 text-sm" placeholder="CS ID, URL, 발화어 등 기입"/>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">편성 기간 <span className="text-red-500">*</span></label>
+                  <div className="flex items-center gap-2">
+                    <input type="date" name="startDate" value={form.startDate} onChange={handleFormChange} required className="flex-1 border rounded p-2 text-sm"/>
+                    <span className="text-gray-500">~</span>
+                    <input type="date" name="endDate" value={form.endDate} min={form.startDate} onChange={handleFormChange} required className="flex-1 border rounded p-2 text-sm"/>
+                  </div>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">이미지 가이드라인 확인</label>
-                <div className="w-full h-32 border border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden">
-                  {form.bannerType && SYS_CONFIG.bannerImages[form.bannerType] ? (
-                    <img src={SYS_CONFIG.bannerImages[form.bannerType]} alt="Guide" className="object-contain h-full" />
-                  ) : <span className="text-xs text-gray-400">배너 유형 선택 시 가이드가 표시됩니다.</span>}
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">랜딩 유형 <span className="text-red-500">*</span></label>
+                    <select name="landingType" value={form.landingType} onChange={handleFormChange} className="w-full border rounded p-2 text-sm">
+                      {SYS_CONFIG.landingTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">랜딩 상세 내용</label>
+                    <input type="text" name="landingDetail" value={form.landingDetail} onChange={handleFormChange} className="w-full border rounded p-2 text-sm" placeholder="CS ID, URL, 발화어 등 기입"/>
+                  </div>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">이미지 / Jira 링크</label>
-                <input type="text" name="jiraLink" value={form.jiraLink} onChange={handleFormChange} className="w-full border rounded p-2 text-sm" placeholder="https://jira.skbroadband.com/..."/>
-              </div>
-
-              <div className="pt-4 border-t border-gray-100 flex justify-end">
-                <button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-sm transition disabled:bg-blue-300 flex items-center gap-2">
-                  {loading ? '처리 중...' : <><i data-feather="send" className="w-4 h-4"></i> 편성 요청서 등록</>}
-                </button>
-              </div>
-            </form>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">이미지 가이드라인 확인</label>
+                  <div className="w-full h-32 border border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden">
+                    {form.bannerType && SYS_CONFIG.bannerImages[form.bannerType] ? (
+                      <img src={SYS_CONFIG.bannerImages[form.bannerType]} alt="Guide" className="object-contain h-full" />
+                    ) : <span className="text-xs text-gray-400">배너 유형 선택 시 가이드가 표시됩니다.</span>}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">이미지 / Jira 링크</label>
+                  <input type="text" name="jiraLink" value={form.jiraLink} onChange={handleFormChange} className="w-full border rounded p-2 text-sm" placeholder="https://jira.skbroadband.com/..."/>
+                </div>
+                <div className="pt-4 border-t border-gray-100 flex justify-end">
+                  <button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-sm transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2">
+                    {loading ? '처리 중...' : <><FeatherIcon name="send" className="w-4 h-4" /> 편성 요청서 등록</>}
+                  </button>
+                </div>
+              </form>
+            </fieldset>
           </div>
         </div>
       );
 
       // --- [2. 승인 대기열 컴포넌트] ---
       const handleApprove = async (req) => {
-        if (!confirm(`[${req.이벤트명}] 건을 마스터 데이터로 승인 이관하시겠습니까?`)) return;
+        if (!window.confirm(`[${req.이벤트명}] 건을 마스터 데이터로 승인 이관하시겠습니까?`)) return;
         setLoading(true);
         try {
-          const res = await fetch(API_URL, { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action: 'approveRequest', payload: {...req, 상태: '승인완료'} }) });
-          if ((await res.json()).status === 'success') {
-            fetchData('getRequests', setRequests); fetchData('getApproved', setApproved);
+          const res = await fetch(API_URL, { 
+            method: 'POST', 
+            headers:{'Content-Type':'application/json'}, 
+            body: JSON.stringify({ action: 'approveRequest', payload: {...req, 상태: '승인완료'} }) 
+          });
+          const jsonResult = await res.json();
+          if (jsonResult.status === 'success') {
+            syncAllData(); // 성공 후 동기화
           }
-        } catch(e) { alert("승인 오류: "+e); }
-        setLoading(false);
+        } catch(e) { 
+          alert("승인 처리 중 서버 통신 오류가 발생했습니다: " + e); 
+        } finally {
+          setLoading(false);
+        }
       };
 
       const renderApproval = () => {
@@ -368,7 +398,9 @@
                       <td className="p-4">{req.담당자}</td>
                       <td className="p-4 text-xs font-mono">{req.요청시작일} ~ {req.요청종료일}</td>
                       <td className="p-4"><span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-bold">대기중</span></td>
-                      <td className="p-4 text-center"><button onClick={()=>handleApprove(req)} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs font-bold">승인하기</button></td>
+                      <td className="p-4 text-center">
+                        <button onClick={()=>handleApprove(req)} disabled={loading} className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-3 py-1.5 rounded text-xs font-bold transition">승인하기</button>
+                      </td>
                     </tr>
                   ))}
                   {pending.length === 0 && <tr><td colSpan="6" className="p-12 text-center text-gray-400">대기 중인 요청이 없습니다.</td></tr>}
