@@ -32,7 +32,6 @@
 
   <script type="text/babel">
   const GAS_API_URL = "https://royal-flower-ea31.alcheminos.workers.dev/"; 
-  const CF_SHEET_URL = "https://your-cloudflare-worker-url.workers.dev"; // TODO: 실제 클라우드플레어 워커 URL로 변경
 
   // [설정값 및 누락 변수 복구]
   const CONFIG = {
@@ -84,7 +83,7 @@
     // 2. [CF 연동] 구글 시트 채널 인벤토리 불러오기
     const loadChannelData = async () => {
       try {
-        const res = await fetch(CF_SHEET_URL);
+        const res = await fetch(GAS_API_URL);
         const rawData = await res.json(); 
         
         // rawData가 [["지상파/종편", "홈쇼핑", ...], ["[5번] SBS", "[2번] CJ ONSTYLE+", ...]] 형태라고 가정
