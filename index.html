@@ -31,22 +31,75 @@
   <div id="root" class="w-full h-full"></div>
 
   <script type="text/babel">
-    const FeatherIcon = ({ name, className }) => {
-      if (!window.feather || !window.feather.icons[name]) return null;
-      return <span className={`inline-flex items-center justify-center ${className || ''}`} dangerouslySetInnerHTML={{ __html: window.feather.icons[name].toSvg({ class: className }) }} />;
+  const API_URL = "https://royal-flower-ea31.alcheminos.workers.dev/";
+
+  // --- [메인 애플리케이션] ---
+  function App() {
+    const [currentMenu, setCurrentMenu] = React.useState('list'); 
+    const [events, setEvents] = React.useState([]); // 서버에서 불러온 리스트
+    const [filterType, setFilterType] = React.useState('전체');
+    const [isApprovalAuthed, setIsApprovalAuthed] = React.useState(false);
+    const [isModalOpen, setIsModalOpen] = React.useState(false);
+    const [editTarget, setEditTarget] = React.useState(null); 
+
+    // 1. [GAS 연동] 데이터 불러오기 (GET)
+    const loadData = async () => {
+      try {
+        const res = await fetch(`${API_URL}?action=getRequests`);
+        const data = await res.json();
+        // DB 필드명 매핑 (요청ID -> id, 이벤트명 -> title 등)
+        setEvents(data.map(item => ({
+          id: item.요청ID,
+          title: item.이벤트명,
+          manager: item.담당자,
+          bannerType: item.배너유형,
+          start: item.요청시작일,
+          end: item.요청종료일,
+          status: item.상태 === '승인완료' ? 'approved' : 'request',
+          // 기타 상세 필드들도 필요시 여기에 추가
+        })));
+      } catch(e) { alert("데이터 로딩 실패: " + e); }
     };
 
-    // --- [설정 및 Mock 데이터] ---
-    const CONFIG = {
-      bannerTypes: ["WingUI 배너", "편성표 배너", "미니EPG", "가이드채널 배너트리거", "일반채널 배너트리거"],
-      landingTypes: ["메뉴 바로가기 (1 depth)", "실시간 채널", "미디어 에이전트 연결", "구매하기 Half UI", "브라우저 팝업", "VOD 시놉시스"],
-      channelGroups: ["[지상파/종편] 전체", "[영화] 전체", "[스포츠/레저] 전체", "[애니/키즈] 전체"]
+    React.useEffect(() => { loadData(); }, []);
+
+    // 2. [GAS 연동] 신규/수정 저장 (POST)
+    const handleSave = async (formData) => {
+      const action = editTarget ? 'updateRequest' : 'addRequest';
+      const payload = {
+        이벤트명: formData.title,
+        담당자: formData.manager,
+        배너유형: formData.bannerType,
+        요청시작일: formData.start,
+        요청종료일: formData.end,
+        상태: '신규(요청)'
+      };
+
+      try {
+        await fetch(API_URL, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ action: action, payload: payload })
+        });
+        alert("요청이 처리되었습니다.");
+        loadData(); // 새로고침
+        closeModal();
+      } catch(e) { alert("저장 실패: " + e); }
     };
 
-    const INITIAL_EVENTS = [
-      { id: '1', title: '여름 VOD 특가', manager: '홍길동', bannerType: 'WingUI 배너', landingType: '브라우저 팝업', landingDetail: 'https://...', jiraLink: 'https://jira.../BTV-101', start: '2026-07-06', end: '2026-07-12', status: 'approved' },
-      { id: '2', title: '주말 예능 스페셜', manager: '이영희', bannerType: '미니EPG', targetGroup: '[스포츠/레저] 전체', targetChannel: '984', targetProgram: '런닝맨', landingType: '메뉴 바로가기 (1 depth)', landingDetail: 'U52_07', jiraLink: '', start: '2026-07-10', end: '2026-07-12', status: 'request' }
-    ];
+    // 3. [GAS 연동] 승인 처리 (POST)
+    const handleBulkApprove = async (ids) => {
+      // 선택된 ID들에 대해 승인 처리 호출
+      for (const id of ids) {
+        await fetch(API_URL, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ action: 'approveRequest', payload: { 원본요청ID: id } })
+        });
+      }
+      alert("선택한 항목이 승인되었습니다.");
+      loadData();
+    };
 
     // --- [메인 애플리케이션] ---
     function App() {
