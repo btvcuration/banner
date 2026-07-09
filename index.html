@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>B tv 실시간 인벤토리 편성 Admin 시스템</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const API_URL = "https://royal-flower-ea31.alcheminos.workers.dev/";
+
+    function App() {
+      const [activeTab, setActiveTab] = React.useState('requests');
+      const [requests, setRequests] = React.useState([]);
+      const [approved, setApproved] = React.useState([]);
+      const [schedules, setSchedules] = React.useState([]);
+      const [loading, setLoading] = React.useState(false);
+      const [filterBanner, setFilterBanner] = React.useState('all');
+
+      // 1. 데이터 가져오기 엔진 (GET)
+      const fetchData = async (action, setData) => {
+        setLoading(true);
+        try {
+          const response = await fetch(`${API_URL}?action=${action}`);
+          const json = await response.json();
+          setData(json);
+        } catch (error) {
+          alert(`데이터 로드 실패: ${error.toString()}`);
+        }
+        setLoading(false);
+      };
+
+      React.useEffect(() => {
+        if (activeTab === 'requests') fetchData('getRequests', setRequests);
+        if (activeTab === 'approved') fetchData('getApproved', setApproved);
+        if (activeTab === 'schedules') fetchData('getSchedules', setSchedules);
+      }, [activeTab]);
+
+      // 2. 승인 처리 엔진 (POST)
+      const handleApprove = async (reqItem) => {
+        if (!window.confirm(`[${reqItem.이벤트명}] 편성을 승인하시겠습니까?`)) return;
+        setLoading(true);
+        try {
+          const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'approveRequest',
+              payload: {
+                원본요청ID: reqItem.요청ID,
+                상태: '승인완료',
+                구분: reqItem.구분,
+                이벤트명: reqItem.이벤트명,
+                승인시작일: reqItem.요청시작일,
+                승인종료일: reqItem.요청종료일,
+                편성기간: reqItem.편성기간,
+                편성영역: reqItem.편성영역,
+                대상채널_상세: reqItem.대상채널_상세,
+                담당자: reqItem.담당자,
+                배너유형: reqItem.배너유형,
+                랜딩유형: reqItem.랜딩유형,
+                랜딩세부내용: reqItem.랜딩세부내용,
+                대상STB: reqItem.대상STB,
+                이미지_Jira링크: reqItem.이미지_Jira링크,
+                비고: reqItem.비고
+              }
+            })
+          });
+          const result = await response.json();
+          if (result.status === 'success') {
+            alert('✅ 승인 처리가 완료되어 마스터 DB로 이관되었습니다.');
+            fetchData('getRequests', setRequests);
+          }
+        } catch (error) {
+          alert('승인 처리 중 오류 발생: ' + error.toString());
+        }
+        setLoading(false);
+      };
+
+      return (
+        <div class="p-6 max-w-7xl mx-auto">
+          {/* 헤더 영역 */}
+          <div class="flex justify-between items-center border-b-2 border-gray-900 pb-4 mb-6">
+            <h1 class="text-2xl font-black text-gray-900">📺 B tv 실시간 인벤토리 편성 Admin 시스템</h1>
+            {loading && <span class="text-blue-600 font-bold animate-pulse">🔄 실시간 동기화 중...</span>}
+          </div>
+
+          {/* 탭 내비게이션 버튼 */}
+          <div class="flex gap-2 mb-6">
+            <button onClick={() => setActiveTab('requests')} class={`px-5 py-2.5 font-bold rounded text-sm transition ${activeTab === 'requests' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+              📥 신규 요청 관리 ({requests.filter(r => r.상태 === '신규(요청)').length})
+            </button>
+            <button onClick={() => setActiveTab('approved')} class={`px-5 py-2.5 font-bold rounded text-sm transition ${activeTab === 'approved' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+              📋 승인 마스터 데이터 ({approved.length})
+            </button>
+            <button onClick={() => setActiveTab('schedules')} class={`px-5 py-2.5 font-bold rounded text-sm transition ${activeTab === 'schedules' ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+              📅 일자별 실편성 타임라인 ({schedules.length})
+            </button>
+          </div>
+
+          {/* 1. 신규 요청 관리 화면 */}
+          {activeTab === 'requests' && (
+            <div class="overflow-x-auto bg-white rounded shadow">
+              <table class="w-full text-sm text-left">
+                <thead class="bg-blue-600 text-white text-center font-bold">
+                  <tr>
+                    <th class="p-3 border">요청ID</th><th class="p-3 border">구분</th><th class="p-3 border">이벤트명</th>
+                    <th class="p-3 border">배너유형</th><th class="p-3 border">편성영역</th><th class="p-3 border">요청기간</th>
+                    <th class="p-3 border">담당자</th><th class="p-3 border">액션</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {requests.filter(r => r.상태 === '신규(요청)').map((req) => (
+                    <tr key={req.요청ID} class="text-center border-b hover:bg-gray-50">
+                      <td class="p-3 border text-xs font-mono text-gray-500">{req.요청ID}</td>
+                      <td class="p-3 border"><span class="px-2 py-1 text-xs font-bold rounded bg-blue-100 text-blue-800">{req.구분}</span></td>
+                      <td class="p-3 border font-bold text-left text-gray-900">{req.이벤트명}</td>
+                      <td class="p-3 border text-gray-600">{req.배너유형}</td>
+                      <td class="p-3 border font-semibold text-purple-700">{req.편성영역 || '-'}</td>
+                      <td class="p-3 border font-mono text-xs">{req.요청시작일} ~ {req.요청종료일}</td>
+                      <td class="p-3 border font-medium">{req.담당자}</td>
+                      <td class="p-3 border">
+                        <button onClick={() => handleApprove(req)} class="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-1.5 rounded text-xs">🟢 승인 이관</button>
+                      </td>
+                    </tr>
+                  ))}
+                  {requests.filter(r => r.상태 === '신규(요청)').length === 0 && (
+                    <tr><td colSpan="8" class="p-12 text-center text-gray-400 font-medium">대기 중인 신규 편성 요청 건이 없습니다.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* 2. 승인 마스터 데이터 화면 */}
+          {activeTab === 'approved' && (
+            <div class="bg-white p-4 rounded shadow">
+              <div class="mb-4 flex items-center gap-2">
+                <span class="text-sm font-bold text-gray-700">배너 유형 필터:</span>
+                <select value={filterBanner} onChange={(e) => setFilterBanner(e.target.value)} class="border p-1.5 rounded text-sm bg-gray-50 font-medium">
+                  <option value="all">전체 배너 마스터 보기</option>
+                  <option value="WingUI 배너">WingUI 배너</option>
+                  <option value="편성표 배너">편성표 배너</option>
+                </select>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left">
+                  <thead class="bg-green-600 text-white text-center font-bold">
+                    <tr>
+                      <th class="p-3 border">승인ID</th><th class="p-3 border">이벤트명</th><th class="p-3 border">배너유형</th>
+                      <th class="p-3 border">편성영역</th><th class="p-3 border">최종 승인기간</th><th class="p-3 border">랜딩유형</th>
+                      <th class="p-3 border">담당자</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {approved.filter(a => filterBanner === 'all' || a.배너유형 === filterBanner).map((app) => (
+                      <tr key={app.승인ID} class="text-center border-b hover:bg-gray-50">
+                        <td class="p-3 border text-xs font-mono text-gray-500">{app.승인ID}</td>
+                        <td class="p-3 border text-left font-semibold text-gray-900">{app.이벤트명}</td>
+                        <td class="p-3 border text-gray-600">{app.배너유형}</td>
+                        <td class="p-3 border font-semibold text-purple-700">{app.편성영역 || '-'}</td>
+                        <td class="p-3 border font-mono text-xs text-green-700 font-bold">{app.승인시작일} ~ {app.승인종료일}</td>
+                        <td class="p-3 border text-xs text-gray-600">{app.랜딩유형}</td>
+                        <td class="p-3 border">{app.담당자}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* 3. 일자별 실편성 타임라인 화면 */}
+          {activeTab === 'schedules' && (
+            <div class="bg-white p-4 rounded shadow">
+              <div class="flex justify-between items-center mb-4">
+                <span class="text-sm font-semibold text-gray-500">ℹ️ 확정 및 조율 알고리즘을 거쳐 날짜별(Slot)로 매핑된 최하단 캘린더 데이터셋입니다.</span>
+                <button class="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded text-sm shadow">🤖 자동 블록 분배 로직 가동</button>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left">
+                  <thead class="bg-red-600 text-white text-center font-bold">
+                    <tr>
+                      <th class="p-3 border">편성일자</th><th class="p-3 border">배너유형</th><th class="p-3 border">편성영역</th>
+                      <th class="p-3 border">구분</th><th class="p-3 border">최종 확정 프로모션명</th><th class="p-3 border">UNA확인</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {schedules.map((sch) => (
+                      <tr key={sch.실편성ID} class={`text-center border-b hover:bg-gray-50 ${sch.구분 === '조율편성' ? 'bg-yellow-50' : ''}`}>
+                        <td class="p-3 border font-mono font-bold text-gray-900">{sch.편성일자}</td>
+                        <td class="p-3 border text-gray-600">{sch.배너유형}</td>
+                        <td class="p-3 border font-semibold text-purple-700">{sch.편성영역}</td>
+                        <td class="p-3 border">
+                          <span class={`px-2 py-0.5 text-xs font-bold rounded ${sch.구분 === '신규' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                            {sch.구분}
+                          </span>
+                        </td>
+                        <td class="p-3 border text-left font-bold text-gray-900">{sch.이벤트명}</td>
+                        <td class="p-3 border font-bold text-xs" style={{ color: sch.UNA편성확인 === '완료' ? '#16a34a' : '#dc2626' }}>
+                          {sch.UNA편성확인 || '대기'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
