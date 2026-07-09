@@ -21,7 +21,6 @@
     .timeline-grid { background-size: 60px 100%; background-image: linear-gradient(to right, #f1f5f9 1px, transparent 1px); }
     .event-bar { transition: all 0.2s; }
     .event-bar:hover { filter: brightness(1.05); transform: translateY(-1px); z-index: 10; }
-    /* 모달 오버레이 애니메이션 */
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     .modal-overlay { animation: fadeIn 0.2s ease-out forwards; }
@@ -40,43 +39,36 @@
     // --- [설정 및 Mock 데이터] ---
     const CONFIG = {
       bannerTypes: ["WingUI 배너", "편성표 배너", "미니EPG", "가이드채널 배너트리거", "일반채널 배너트리거"],
-      groups: ["지상파/종편", "영화", "키즈/애니", "스포츠/예능"]
+      landingTypes: ["메뉴 바로가기 (1 depth)", "실시간 채널", "미디어 에이전트 연결", "구매하기 Half UI", "브라우저 팝업", "VOD 시놉시스"],
+      channelGroups: ["[지상파/종편] 전체", "[영화] 전체", "[스포츠/레저] 전체", "[애니/키즈] 전체"]
     };
 
     const INITIAL_EVENTS = [
-      { id: '1', title: '여름 VOD 특가', manager: '홍길동', bannerType: 'WingUI 배너', targetDetail: '전체 채널', start: '2026-07-06', end: '2026-07-12', status: 'approved' },
-      { id: '2', title: '키즈 월정액 프로모션', manager: '김철수', bannerType: '편성표 배너', targetDetail: '키즈/애니', start: '2026-07-08', end: '2026-07-15', status: 'approved' },
-      { id: '3', title: '주말 예능 스페셜', manager: '이영희', bannerType: '미니EPG', targetDetail: '스포츠/예능', start: '2026-07-10', end: '2026-07-12', status: 'request' },
-      { id: '4', title: 'B tv 쇼핑 긴급 특가', manager: '박관리', bannerType: 'WingUI 배너', targetDetail: '전체 채널', start: '2026-07-13', end: '2026-07-18', status: 'request' }
+      { id: '1', title: '여름 VOD 특가', manager: '홍길동', bannerType: 'WingUI 배너', landingType: '브라우저 팝업', landingDetail: 'https://...', jiraLink: 'https://jira.../BTV-101', start: '2026-07-06', end: '2026-07-12', status: 'approved' },
+      { id: '2', title: '주말 예능 스페셜', manager: '이영희', bannerType: '미니EPG', targetGroup: '[스포츠/레저] 전체', targetChannel: '984', targetProgram: '런닝맨', landingType: '메뉴 바로가기 (1 depth)', landingDetail: 'U52_07', jiraLink: '', start: '2026-07-10', end: '2026-07-12', status: 'request' }
     ];
 
     // --- [메인 애플리케이션] ---
     function App() {
-      const [currentMenu, setCurrentMenu] = React.useState('list'); // list, approval, calendar
+      const [currentMenu, setCurrentMenu] = React.useState('list'); 
       const [events, setEvents] = React.useState(INITIAL_EVENTS);
       const [filterType, setFilterType] = React.useState('전체');
-      
-      // 승인 메뉴 인증 상태
       const [isApprovalAuthed, setIsApprovalAuthed] = React.useState(false);
-      
-      // 모달 상태
       const [isModalOpen, setIsModalOpen] = React.useState(false);
-      const [editTarget, setEditTarget] = React.useState(null); // null이면 신규
+      const [editTarget, setEditTarget] = React.useState(null); 
 
-      // 필터링된 데이터
       const filteredEvents = events.filter(e => filterType === '전체' || e.bannerType === filterType);
 
-      // 모달 열기/닫기
       const openModal = (eventData = null) => {
         setEditTarget(eventData);
         setIsModalOpen(true);
       };
+      
       const closeModal = () => {
         setIsModalOpen(false);
         setEditTarget(null);
       };
 
-      // 폼 제출 (저장)
       const handleSave = (formData) => {
         if (editTarget && editTarget.id) {
           setEvents(events.map(e => e.id === editTarget.id ? { ...e, ...formData } : e));
@@ -88,7 +80,6 @@
         closeModal();
       };
 
-      // 일괄 승인 처리
       const handleBulkApprove = (ids) => {
         setEvents(events.map(e => ids.includes(e.id) ? { ...e, status: 'approved' } : e));
         alert(`${ids.length}건이 승인 처리되었습니다.`);
@@ -117,7 +108,6 @@
 
           {/* 메인 콘텐츠 영역 */}
           <div className="flex-1 flex flex-col min-w-0">
-            {/* 공통 헤더 (필터 포함) */}
             <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shrink-0 z-10 shadow-sm">
               <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                 {currentMenu === 'list' && <><FeatherIcon name="list" className="w-5 h-5 text-blue-600"/> 전체 편성 리스트</>}
@@ -126,7 +116,6 @@
               </h2>
               
               <div className="flex items-center gap-4">
-                {/* 글로벌 필터 */}
                 <div className="flex items-center bg-gray-100 rounded-lg px-3 py-1.5 border border-gray-200">
                   <FeatherIcon name="filter" className="w-4 h-4 text-gray-500 mr-2"/>
                   <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="bg-transparent text-sm font-medium text-gray-700 outline-none cursor-pointer">
@@ -142,7 +131,6 @@
               </div>
             </header>
 
-            {/* 뷰 라우팅 */}
             <main className="flex-1 overflow-hidden relative">
               {currentMenu === 'list' && <ListView events={filteredEvents} onEdit={openModal} />}
               {currentMenu === 'approval' && (
@@ -154,54 +142,57 @@
             </main>
           </div>
 
-          {/* 등록/수정 팝업 모달 */}
           {isModalOpen && <EventModal eventData={editTarget} onClose={closeModal} onSave={handleSave} />}
         </div>
       );
     }
 
     // --- [뷰 컴포넌트: 1. 편성 리스트] ---
-    const ListView = ({ events, onEdit }) => (
-      <div className="h-full overflow-y-auto p-6">
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-bold">
-              <tr>
-                <th className="p-4 w-16 text-center">상태</th>
-                <th className="p-4">이벤트명</th>
-                <th className="p-4">배너유형</th>
-                <th className="p-4">타겟 상세</th>
-                <th className="p-4">요청기간</th>
-                <th className="p-4">담당자</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {events.length === 0 ? <tr><td colSpan="6" className="p-8 text-center text-gray-500">데이터가 없습니다.</td></tr> : null}
-              {events.map(e => {
-                const isReq = e.status === 'request';
-                return (
-                  <tr key={e.id} 
-                      onClick={() => onEdit(e)}
-                      className={`hover:bg-blue-50 cursor-pointer transition-colors ${isReq ? 'bg-white' : 'bg-gray-50/50 opacity-80'}`}
-                      title={isReq ? "클릭하여 수정" : "클릭하여 상세 보기"}>
-                    <td className="p-4 text-center">
-                      <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${isReq ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
-                        {isReq ? '대기' : '승인'}
-                      </span>
-                    </td>
-                    <td className="p-4 font-bold text-gray-800">{e.title}</td>
-                    <td className="p-4 text-gray-600">{e.bannerType}</td>
-                    <td className="p-4 text-gray-600">{e.targetDetail}</td>
-                    <td className="p-4 text-gray-600 whitespace-nowrap">{e.start} ~ {e.end}</td>
-                    <td className="p-4 text-gray-600">{e.manager}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+    const ListView = ({ events, onEdit }) => {
+      const getTargetDisplay = (e) => {
+        if (!['미니EPG', '일반채널 배너트리거'].includes(e.bannerType)) return '-';
+        return `${e.targetGroup || ''} / ${e.targetChannel || ''} / ${e.targetProgram || ''}`;
+      };
+
+      return (
+        <div className="h-full overflow-y-auto p-6">
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-bold">
+                <tr>
+                  <th className="p-4 w-16 text-center">상태</th>
+                  <th className="p-4">이벤트명</th>
+                  <th className="p-4">배너유형</th>
+                  <th className="p-4">편성 대상 (영역)</th>
+                  <th className="p-4">요청기간</th>
+                  <th className="p-4">담당자</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {events.length === 0 ? <tr><td colSpan="6" className="p-8 text-center text-gray-500">데이터가 없습니다.</td></tr> : null}
+                {events.map(e => {
+                  const isReq = e.status === 'request';
+                  return (
+                    <tr key={e.id} onClick={() => onEdit(e)} className={`hover:bg-blue-50 cursor-pointer transition-colors ${isReq ? 'bg-white' : 'bg-gray-50/50 opacity-80'}`}>
+                      <td className="p-4 text-center">
+                        <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${isReq ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
+                          {isReq ? '대기' : '승인'}
+                        </span>
+                      </td>
+                      <td className="p-4 font-bold text-gray-800">{e.title}</td>
+                      <td className="p-4 text-gray-600">{e.bannerType}</td>
+                      <td className="p-4 text-gray-600 text-xs">{getTargetDisplay(e)}</td>
+                      <td className="p-4 text-gray-600 whitespace-nowrap">{e.start} ~ {e.end}</td>
+                      <td className="p-4 text-gray-600">{e.manager}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
-    );
+      );
+    };
 
     // --- [뷰 컴포넌트: 2. 승인 메뉴 & 비밀번호] ---
     const PasswordPrompt = ({ onAuth }) => {
@@ -219,7 +210,8 @@
             </div>
             <h3 className="text-xl font-bold text-gray-800 mb-2">관리자 인증</h3>
             <p className="text-sm text-gray-500 mb-6 text-center">프로모션 승인은 관리자만 접근할 수 있습니다.<br/>비밀번호를 입력해주세요.</p>
-            <input type="password" value={pwd} onChange={e=>setPwd(e.target.value)} autoFocus placeholder="비밀번호 입력 (2685)" className="w-full border border-gray-300 rounded-lg p-3 text-center mb-4 focus:ring-2 focus:ring-red-500 outline-none font-mono text-lg tracking-widest"/>
+            {/* 하드코딩 힌트 제거 */}
+            <input type="password" value={pwd} onChange={e=>setPwd(e.target.value)} autoFocus placeholder="비밀번호 입력" className="w-full border border-gray-300 rounded-lg p-3 text-center mb-4 focus:ring-2 focus:ring-red-500 outline-none font-mono text-lg tracking-widest"/>
             <button type="submit" className="w-full bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700 transition-colors">잠금 해제</button>
           </form>
         </div>
@@ -230,26 +222,19 @@
       const pendingEvents = events.filter(e => e.status === 'request');
       const [selected, setSelected] = React.useState([]);
 
-      const toggleSelect = (id) => {
-        setSelected(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
-      };
-      const selectAll = () => {
-        if (selected.length === pendingEvents.length) setSelected([]);
-        else setSelected(pendingEvents.map(e => e.id));
-      };
+      const toggleSelect = (id) => setSelected(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+      const selectAll = () => setSelected(selected.length === pendingEvents.length ? [] : pendingEvents.map(e => e.id));
 
       return (
         <div className="h-full flex flex-col p-6">
           <div className="mb-4 flex justify-between items-end">
             <div>
               <h3 className="text-lg font-bold text-gray-800">승인 대기 목록</h3>
-              <p className="text-sm text-gray-500">요청 내역을 확인하고 체크박스를 선택하여 일괄 승인하세요.</p>
             </div>
             <button onClick={() => onApprove(selected)} disabled={selected.length === 0} className="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white font-bold px-6 py-2.5 rounded-lg text-sm flex items-center gap-2 transition-colors shadow-sm">
               <FeatherIcon name="check" className="w-4 h-4"/> 선택 항목 승인 ({selected.length})
             </button>
           </div>
-
           <div className="bg-white border border-gray-200 rounded-xl shadow-sm flex-1 overflow-y-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
@@ -258,18 +243,16 @@
                   <th className="p-4">이벤트명</th>
                   <th className="p-4">배너유형</th>
                   <th className="p-4">요청기간</th>
-                  <th className="p-4">담당자</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {pendingEvents.length === 0 ? <tr><td colSpan="5" className="p-12 text-center text-gray-500"><FeatherIcon name="smile" className="w-8 h-8 mx-auto mb-2 opacity-50"/>승인 대기 중인 항목이 없습니다.</td></tr> : null}
+                {pendingEvents.length === 0 ? <tr><td colSpan="4" className="p-12 text-center text-gray-500">승인 대기 중인 항목이 없습니다.</td></tr> : null}
                 {pendingEvents.map(e => (
                   <tr key={e.id} className="hover:bg-blue-50 cursor-pointer transition-colors" onClick={() => toggleSelect(e.id)}>
-                    <td className="p-4 text-center" onClick={(e)=>e.stopPropagation()}><input type="checkbox" checked={selected.includes(e.id)} onChange={() => toggleSelect(e.id)} className="w-4 h-4 rounded text-blue-600 cursor-pointer"/></td>
+                    <td className="p-4 text-center" onClick={(ev)=>ev.stopPropagation()}><input type="checkbox" checked={selected.includes(e.id)} onChange={() => toggleSelect(e.id)} className="w-4 h-4 rounded text-blue-600 cursor-pointer"/></td>
                     <td className="p-4 font-bold text-gray-800">{e.title}</td>
                     <td className="p-4 text-gray-600"><span className="bg-gray-100 px-2 py-1 rounded border border-gray-200 text-xs">{e.bannerType}</span></td>
                     <td className="p-4 text-gray-600">{e.start} ~ {e.end}</td>
-                    <td className="p-4 text-gray-600">{e.manager}</td>
                   </tr>
                 ))}
               </tbody>
@@ -281,10 +264,9 @@
 
     // --- [뷰 컴포넌트: 3. 타임라인 캘린더] ---
     const TimelineView = ({ events, onEventClick }) => {
-      // 렌더링 범위: 오늘(Mock: 2026-07-06) 기준 14일
       const viewStartDate = new Date('2026-07-06');
       const daysToView = 14; 
-      const cellWidth = 60; // 일별 넓이
+      const cellWidth = 60; 
       
       const dates = Array.from({length: daysToView}, (_, i) => {
         const d = new Date(viewStartDate);
@@ -292,34 +274,24 @@
         return d;
       });
 
-      // 리소스 목록
       const resources = CONFIG.bannerTypes;
 
       const getEventStyle = (event) => {
         const eStart = new Date(event.start);
         const eEnd = new Date(event.end);
         let rStart = eStart < viewStartDate ? viewStartDate : eStart;
-        
         const leftDays = Math.floor(Math.abs(rStart - viewStartDate) / 86400000);
         const widthDays = Math.floor(Math.abs(eEnd - eStart) / 86400000) + 1;
-        
         return { left: `${leftDays * cellWidth}px`, width: `${widthDays * cellWidth}px` };
       };
 
       return (
         <div className="h-full flex flex-col p-6 bg-gray-50">
           <div className="flex-1 bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col overflow-hidden">
-            {/* 캘린더 헤더 & 범례 */}
             <div className="h-12 flex items-center justify-between px-4 border-b border-gray-200 bg-gray-50 shrink-0">
               <div className="text-sm font-bold text-gray-700">2026년 7월 편성 현황</div>
-              <div className="flex gap-4 text-xs font-medium text-gray-600">
-                <span className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-500 rounded"></div> 승인완료 (Solid)</span>
-                <span className="flex items-center gap-1"><div className="w-3 h-3 border-2 border-dashed border-orange-500 bg-white rounded"></div> 미승인/요청 (Dashed)</span>
-              </div>
             </div>
-
             <div className="flex flex-1 overflow-hidden">
-              {/* Y축 (영역) */}
               <div className="w-48 shrink-0 border-r border-gray-200 bg-gray-50">
                 <div className="h-12 border-b border-gray-200 flex items-center justify-center text-xs font-bold text-gray-500">배너 유형 (영역)</div>
                 {resources.map(res => (
@@ -328,44 +300,27 @@
                   </div>
                 ))}
               </div>
-
-              {/* X축 (타임라인) */}
               <div className="flex-1 overflow-x-auto relative">
-                {/* 날짜 헤더 */}
                 <div className="flex h-12 border-b border-gray-200 sticky top-0 bg-white z-10" style={{ width: `${daysToView * cellWidth}px` }}>
-                  {dates.map((d, i) => {
-                    const isWe = d.getDay() === 0 || d.getDay() === 6;
-                    return (
-                      <div key={i} className={`border-r border-gray-100 flex flex-col items-center justify-center shrink-0 ${isWe ? 'bg-red-50/30 text-red-500' : 'text-gray-600'}`} style={{ width: `${cellWidth}px` }}>
-                        <span className="text-[10px] font-bold">{['일','월','화','수','목','금','토'][d.getDay()]}</span>
-                        <span className="text-sm font-black">{d.getDate()}</span>
-                      </div>
-                    );
-                  })}
+                  {dates.map((d, i) => (
+                    <div key={i} className={`border-r border-gray-100 flex flex-col items-center justify-center shrink-0 ${d.getDay() === 0 || d.getDay() === 6 ? 'bg-red-50/30 text-red-500' : 'text-gray-600'}`} style={{ width: `${cellWidth}px` }}>
+                      <span className="text-[10px] font-bold">{['일','월','화','수','목','금','토'][d.getDay()]}</span>
+                      <span className="text-sm font-black">{d.getDate()}</span>
+                    </div>
+                  ))}
                 </div>
-                
-                {/* 그리드 및 이벤트 */}
                 <div className="relative timeline-grid" style={{ width: `${daysToView * cellWidth}px`, height: `${resources.length * 4}rem` }}>
-                  {resources.map((res, i) => {
+                  {resources.map((res) => {
                     const rowEvents = events.filter(e => e.bannerType === res);
                     return (
                       <div key={res} className="h-16 border-b border-gray-100 relative group hover:bg-blue-50/20">
                         {rowEvents.map(event => {
                           const style = getEventStyle(event);
                           const isReq = event.status === 'request';
-                          // 시각적 구별: 승인된 것은 꽉 찬 파란색, 미승인은 점선 테두리에 하얀 배경
-                          const visualClass = isReq 
-                            ? 'border-2 border-dashed border-orange-500 bg-white text-orange-700 font-bold shadow-sm' 
-                            : 'bg-blue-500 text-white font-medium shadow';
-                            
+                          const visualClass = isReq ? 'border-2 border-dashed border-orange-500 bg-white text-orange-700 font-bold shadow-sm' : 'bg-blue-500 text-white font-medium shadow';
                           return (
-                            <div key={event.id}
-                              onClick={() => onEventClick(event)}
-                              className={`event-bar absolute top-2 h-11 rounded-md px-2 py-1 overflow-hidden cursor-pointer flex flex-col justify-center text-xs leading-tight ${visualClass}`}
-                              style={{ left: style.left, width: `calc(${style.width} - 4px)` }}
-                              title={`클릭하여 ${isReq ? '수정' : '상세보기'}`}>
+                            <div key={event.id} onClick={() => onEventClick(event)} className={`event-bar absolute top-2 h-11 rounded-md px-2 py-1 overflow-hidden cursor-pointer flex flex-col justify-center text-xs leading-tight ${visualClass}`} style={{ left: style.left, width: `calc(${style.width} - 4px)` }}>
                               <div className="truncate">{event.title}</div>
-                              {isReq && <div className="text-[10px] opacity-80 mt-0.5 flex items-center gap-1"><FeatherIcon name="edit-2" className="w-3 h-3"/> 미승인</div>}
                             </div>
                           );
                         })}
@@ -382,11 +337,16 @@
 
     // --- [뷰 컴포넌트: 4. 공통 팝업 모달 (Form)] ---
     const EventModal = ({ eventData, onClose, onSave }) => {
-      // 신규 작성 or 수정 모드
       const isReadOnly = eventData && eventData.status === 'approved';
       const [form, setForm] = React.useState(eventData || {
-        title: '', manager: '', bannerType: CONFIG.bannerTypes[0], targetDetail: '', start: '', end: ''
+        title: '', manager: '', bannerType: CONFIG.bannerTypes[0], 
+        targetGroup: '', targetChannel: '', targetProgram: '', // 동적 편성영역 필드
+        landingType: CONFIG.landingTypes[0], landingDetail: '', jiraLink: '', // 복구된 필드
+        start: '', end: ''
       });
+
+      // 편성 영역이 필요한 배너인지 확인
+      const needsTargeting = ['미니EPG', '일반채널 배너트리거'].includes(form.bannerType);
 
       const handleChange = (e) => {
         const { name, value } = e.target;
@@ -400,9 +360,8 @@
 
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center modal-overlay bg-gray-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col modal-content max-h-[95vh]">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col modal-content max-h-[95vh]">
             
-            {/* 모달 헤더 */}
             <div className={`px-6 py-4 border-b flex justify-between items-center text-white ${isReadOnly ? 'bg-gray-600' : 'bg-blue-600'}`}>
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <FeatherIcon name={isReadOnly ? 'file-text' : 'edit'} className="w-5 h-5"/>
@@ -411,10 +370,10 @@
               <button onClick={onClose} className="text-white/80 hover:text-white hover:rotate-90 transition-transform"><FeatherIcon name="x" className="w-6 h-6"/></button>
             </div>
 
-            {/* 모달 폼 본문 (원스크린에 들어오도록 2단 Grid 구성) */}
-            <form id="modalForm" onSubmit={handleSubmit} className="p-6 overflow-y-auto flex-1 space-y-5">
+            <form id="modalForm" onSubmit={handleSubmit} className="p-6 overflow-y-auto flex-1 space-y-6">
               {isReadOnly && <div className="bg-gray-100 text-gray-600 text-sm p-3 rounded-lg flex items-center gap-2 font-bold mb-2"><FeatherIcon name="lock" className="w-4 h-4"/> 이미 승인된 프로모션은 수정할 수 없습니다.</div>}
               
+              {/* 기본 정보 */}
               <div className="grid grid-cols-2 gap-5">
                 <div className="col-span-2">
                   <label className="block text-sm font-bold text-gray-700 mb-1.5">이벤트명 (타이틀)</label>
@@ -436,10 +395,57 @@
                     </select>
                   )}
                 </div>
+              </div>
+
+              {/* 동적 편성 영역 (조건부 노출) */}
+              {needsTargeting && (
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                  <h4 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-1"><FeatherIcon name="target" className="w-4 h-4 text-blue-600"/> 상세 편성 영역 설정</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 mb-1.5">채널 그룹</label>
+                      {isReadOnly ? (
+                        <input type="text" value={form.targetGroup} readOnly className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-gray-100 text-gray-500"/>
+                      ) : (
+                        <select name="targetGroup" value={form.targetGroup} onChange={handleChange} required className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                          <option value="">선택하세요</option>
+                          {CONFIG.channelGroups.map(g => <option key={g} value={g}>{g}</option>)}
+                        </select>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 mb-1.5">채널 번호</label>
+                      <input type="text" name="targetChannel" value={form.targetChannel} onChange={handleChange} readOnly={isReadOnly} required placeholder="예: 5" className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none read-only:bg-gray-100 read-only:text-gray-500"/>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 mb-1.5">프로그램명</label>
+                      <input type="text" name="targetProgram" value={form.targetProgram} onChange={handleChange} readOnly={isReadOnly} required placeholder="예: 런닝맨" className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none read-only:bg-gray-100 read-only:text-gray-500"/>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 랜딩 및 기타 정보 (복구됨) */}
+              <div className="grid grid-cols-2 gap-5 border-t pt-5">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5">랜딩 유형</label>
+                  {isReadOnly ? (
+                    <input type="text" value={form.landingType} readOnly className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-100 text-gray-500"/>
+                  ) : (
+                    <select name="landingType" value={form.landingType} onChange={handleChange} required className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                      {CONFIG.landingTypes.map(l => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5">랜딩 세부 내용 (ID / URL)</label>
+                  <input type="text" name="landingDetail" value={form.landingDetail} onChange={handleChange} readOnly={isReadOnly} required placeholder="U52_07 또는 URL 입력" className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none read-only:bg-gray-100 read-only:text-gray-500"/>
+                </div>
 
                 <div className="col-span-2">
-                  <label className="block text-sm font-bold text-gray-700 mb-1.5">편성 대상 (상세 채널/그룹)</label>
-                  <input type="text" name="targetDetail" value={form.targetDetail} onChange={handleChange} readOnly={isReadOnly} required placeholder="예: 지상파 전체, 또는 채널번호 입력" className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none read-only:bg-gray-100 read-only:text-gray-500"/>
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5">Jira 링크</label>
+                  <input type="url" name="jiraLink" value={form.jiraLink} onChange={handleChange} readOnly={isReadOnly} placeholder="https://jira... (선택사항)" className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none read-only:bg-gray-100 read-only:text-gray-500"/>
                 </div>
 
                 <div>
@@ -454,7 +460,6 @@
               </div>
             </form>
 
-            {/* 모달 푸터 */}
             <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3">
               <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-lg text-sm font-bold text-gray-600 bg-white border border-gray-300 hover:bg-gray-100 transition-colors">닫기</button>
               {!isReadOnly && (
