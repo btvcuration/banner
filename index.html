@@ -3,46 +3,59 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>B tv 실시간 인벤토리 편성 Admin 시스템</title>
+  <title>B tv Admin - Promotion Management</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Feather Icons 연동 -->
+  <script src="https://unpkg.com/feather-icons"></script>
+  <style>
+    body { font-family: 'Pretendard', 'Malgun Gothic', sans-serif; background-color: #f8f9fa; }
+    .sidebar-item.active { background-color: #e8f0fe; color: #1a73e8; border-right: 3px solid #1a73e8; font-weight: 700; }
+    .sidebar-item { transition: all 0.2s ease; }
+    .sidebar-item:hover:not(.active) { background-color: #f1f3f4; }
+    /* 스크롤바 숨기기 (UI 깔끔하게) */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  </style>
 </head>
-<body class="bg-gray-100 text-gray-800">
+<body class="text-gray-800 antialiased h-screen flex overflow-hidden">
 
-  <div id="root"></div>
+  <div id="root" class="w-full h-full flex"></div>
 
   <script type="text/babel">
-    const API_URL = "https://royal-flower-ea31.alcheminos.workers.dev/";
+    const API_URL = "https://royal-flower-ea31.alcheminos.workers.dev/"; // 💡 클라우드플레어 워커 주소
 
-    // B tv 시스템 설정 데이터 (기존 GAS sysConfig 역할)
+    // 시스템 기본 설정 및 배너별 가이드 이미지 매핑
     const SYS_CONFIG = {
       categories: {
         "실시간 채널 편성": ["미니EPG", "가이드채널 배너트리거", "일반채널 배너트리거"],
         "영역 편성": ["편성표 배너", "WingUI 배너"]
       },
       landingTypes: ["메뉴 바로가기 (1 depth)", "실시간 채널", "미디어 에이전트 연결", "구매하기 Half UI", "브라우저 팝업", "VOD 시놉시스"],
-      channelGroups: ["[지상파] 전체", "[종편] 전체", "영화 홀수", "영화 짝수", "스포츠"], // 실제 B tv 그룹으로 수정 필요
-      singleChannels: ["0", "1", "52", "974", "982", "986"] // 단독 예외 채널들
+      channelGroups: ["[지상파/종편] 전체", "영화 홀수", "영화 짝수", "스포츠/레저 짝수", "애니/키즈 홀수"], 
+      singleChannels: ["0", "1", "52", "974", "982", "986"],
+      bannerImages: {
+        "편성표 배너": "https://github.com/btvcuration/campaign/blob/main/assets/images/ui-templates/schedule_banner.png?raw=true",
+        "WingUI 배너": "https://github.com/btvcuration/campaign/blob/main/assets/images/ui-templates/wingui_banner.png?raw=true",
+        "미니EPG": "https://github.com/btvcuration/campaign/blob/main/assets/images/ui-templates/mini_epg.png?raw=true",
+        "가이드채널 배너트리거": "https://github.com/btvcuration/campaign/blob/main/assets/images/ui-templates/trigger_banner.png?raw=true",
+        "일반채널 배너트리거": "https://github.com/btvcuration/campaign/blob/main/assets/images/ui-templates/trigger_banner.png?raw=true"
+      }
     };
 
     function App() {
-      const [activeTab, setActiveTab] = React.useState('requests');
+      const [currentView, setCurrentView] = React.useState('approval'); // 기본 뷰: 승인 대기열
       const [requests, setRequests] = React.useState([]);
       const [approved, setApproved] = React.useState([]);
       const [schedules, setSchedules] = React.useState([]);
       const [loading, setLoading] = React.useState(false);
+      
+      // 아이콘 렌더링을 위한 Effect
+      React.useEffect(() => { feather.replace(); }, [currentView, requests, approved, schedules]);
 
-      // --- [요청 폼 상태(State) 관리] ---
-      const initialFormState = {
-        gubun: '신규', manager: '', category: '', bannerType: '', 
-        epgTargetType: 'channel', targetChannels: [], targetDetail: '', oapTitle: '', 
-        eventName: '', startDate: '', endDate: '', landingType: '메뉴 바로가기 (1 depth)', 
-        landingDetail: '', jiraLink: ''
-      };
-      const [formData, setFormData] = React.useState(initialFormState);
-
+      // 데이터 패칭
       const fetchData = async (action, setData) => {
         setLoading(true);
         try {
@@ -50,314 +63,392 @@
           const json = await response.json();
           setData(json);
         } catch (error) {
-          alert(`데이터 로드 실패: ${error.toString()}`);
+          console.error(`데이터 로드 실패: ${error}`);
         }
         setLoading(false);
       };
 
       React.useEffect(() => {
-        if (activeTab === 'requests') fetchData('getRequests', setRequests);
-        if (activeTab === 'approved') fetchData('getApproved', setApproved);
-        if (activeTab === 'schedules') fetchData('getSchedules', setSchedules);
-      }, [activeTab]);
+        if (currentView === 'request' || currentView === 'approval') fetchData('getRequests', setRequests);
+        if (currentView === 'approval' || currentView === 'schedule') fetchData('getApproved', setApproved);
+        if (currentView === 'schedule') fetchData('getSchedules', setSchedules);
+      }, [currentView]);
 
-      // --- [폼 입력 핸들러] ---
-      const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => {
-          const newData = { ...prev, [name]: value };
-          // 대분류가 바뀌면 배너유형 초기화
-          if (name === 'category') newData.bannerType = ''; 
-          // 시작일이 바뀌면 종료일도 기본 세팅 (편의성)
-          if (name === 'startDate' && !prev.endDate) newData.endDate = value; 
-          return newData;
-        });
-      };
+      // 사이드바 컴포넌트
+      const Sidebar = () => (
+        <div class="w-64 bg-white border-r border-gray-200 flex flex-col h-full shrink-0">
+          <div class="p-6 flex items-center gap-3 border-b border-gray-100">
+            <div class="bg-red-600 text-white font-black text-xl w-10 h-10 flex items-center justify-center rounded">B</div>
+            <div>
+              <h1 class="font-black text-lg leading-tight">B tv Admin</h1>
+              <p class="text-xs text-gray-500">Promotion Management</p>
+            </div>
+          </div>
+          <nav class="flex-1 py-4 flex flex-col gap-1">
+            <a href="#" onClick={() => setCurrentView('dashboard')} class={`sidebar-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-gray-600 ${currentView === 'dashboard' ? 'active' : ''}`}>
+              <i data-feather="grid" class="w-4 h-4"></i> Dashboard
+            </a>
+            <a href="#" onClick={() => setCurrentView('request')} class={`sidebar-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-gray-600 ${currentView === 'request' ? 'active' : ''}`}>
+              <i data-feather="plus-square" class="w-4 h-4"></i> Request Banner
+            </a>
+            <a href="#" onClick={() => setCurrentView('approval')} class={`sidebar-item flex items-center justify-between px-6 py-3 text-sm font-medium text-gray-600 ${currentView === 'approval' ? 'active' : ''}`}>
+              <div class="flex items-center gap-3"><i data-feather="check-circle" class="w-4 h-4"></i> Approval Queue</div>
+              {requests.filter(r => r.상태 === '신규(요청)').length > 0 && (
+                <span class="bg-red-100 text-red-600 py-0.5 px-2 rounded-full text-xs font-bold">{requests.filter(r => r.상태 === '신규(요청)').length}</span>
+              )}
+            </a>
+            <a href="#" onClick={() => setCurrentView('schedule')} class={`sidebar-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-gray-600 ${currentView === 'schedule' ? 'active' : ''}`}>
+              <i data-feather="calendar" class="w-4 h-4"></i> Schedule Calendar
+            </a>
+          </nav>
+          <div class="p-6 border-t border-gray-100">
+            <a href="#" class="flex items-center gap-3 text-sm font-medium text-gray-500 hover:text-gray-800"><i data-feather="settings" class="w-4 h-4"></i> Settings</a>
+          </div>
+        </div>
+      );
 
-      const handleCheckboxChange = (e) => {
-        const { value, checked } = e.target;
-        setFormData(prev => {
-          const updatedChannels = checked 
-            ? [...prev.targetChannels, value] 
-            : prev.targetChannels.filter(ch => ch !== value);
-          return { ...prev, targetChannels: updatedChannels };
-        });
-      };
+      // 상단 헤더 컴포넌트
+      const Header = () => (
+        <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shrink-0">
+          <div class="flex items-center gap-6">
+            <h2 class="text-lg font-bold text-gray-800 capitalize">{currentView.replace(/([A-Z])/g, ' $1').trim()}</h2>
+          </div>
+          <div class="flex items-center gap-6">
+            <div class="relative">
+              <i data-feather="search" class="w-4 h-4 absolute left-3 top-2.5 text-gray-400"></i>
+              <input type="text" placeholder="Search requests..." class="pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm w-64 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"/>
+            </div>
+            <button class="text-gray-400 hover:text-gray-600 relative">
+              <i data-feather="bell" class="w-5 h-5"></i>
+              <span class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+            </button>
+            <div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden border border-gray-300">
+              <img src="https://ui-avatars.com/api/?name=Admin&background=0D8ABC&color=fff" alt="Profile" />
+            </div>
+          </div>
+        </header>
+      );
 
-      // --- [신규 요청 제출 API 호출] ---
-      const handleSubmit = async (e) => {
-        e.preventDefault();
+      // --- [자동 편성 알고리즘 로직 (Frontend 탑재)] ---
+      const runAutoSchedule = () => {
+        if (!confirm("현재 마스터 DB를 기반으로 실편성 자동 분배를 실행하시겠습니까?")) return;
         setLoading(true);
-
-        // 타겟팅 상세 문자열 조립
-        let finalTargetDetail = formData.targetDetail;
-        const isEpg = formData.bannerType === '미니EPG' || formData.bannerType === '일반채널 배너트리거';
         
-        if (isEpg) {
-          if (formData.epgTargetType === 'channel' || formData.epgTargetType === 'singleChannel') {
-            finalTargetDetail = formData.targetChannels.join(' / ');
-          }
+        // 1. 현재(오늘) 날짜 기준 설정 (2026-07-09 컨텍스트)
+        const today = new Date("2026-07-09T00:00:00");
+        
+        // 2. 승인된 데이터 중 오늘 이후 종료되는 건 필터링 및 파싱
+        const activePromos = approved.filter(app => {
+          if(!app.승인종료일) return false;
+          const endDate = new Date(app.승인종료일.replace(/\./g, '-'));
+          return endDate >= today && app.상태 === '승인완료';
+        }).map(app => {
+          const start = new Date(app.승인시작일.replace(/\./g, '-'));
+          const end = new Date(app.승인종료일.replace(/\./g, '-'));
+          const duration = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
+          return { ...app, start, end, duration, assignedDays: 0, printedCount: 0 };
+        });
+
+        if(activePromos.length === 0) {
+          alert("배정할 미래 일정이 없습니다.");
+          setLoading(false);
+          return;
         }
 
-        const payload = {
-          구분: formData.gubun,
-          담당자: formData.manager,
-          이벤트명: formData.eventName,
-          요청시작일: formData.startDate,
-          요청종료일: formData.endDate,
-          편성영역: formData.bannerType,
-          배너유형: formData.bannerType, // DB 스키마 대응
-          대상채널_상세: finalTargetDetail,
-          랜딩유형: formData.landingType,
-          랜딩세부내용: formData.landingDetail,
-          이미지_Jira링크: formData.jiraLink,
-          비고: formData.oapTitle, // OAP 타이틀은 비고로 맵핑
-          상태: '신규(요청)'
-        };
+        // 3. 타임라인 생성
+        let minDate = new Date(today);
+        let maxDate = new Date(Math.max(...activePromos.map(p => p.end)));
+        let timeline = [];
+        let currDate = new Date(minDate);
 
-        try {
-          const response = await fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'addRequest', payload: payload })
+        while (currDate <= maxDate) {
+          const activeReqs = activePromos.filter(p => currDate >= p.start && currDate <= p.end);
+          if (activeReqs.length > 0) {
+            timeline.push({
+              date: new Date(currDate),
+              dateStr: currDate.toISOString().split('T')[0],
+              activeReqs: activeReqs,
+              assignedReq: null,
+              isWeekend: (currDate.getDay() === 0 || currDate.getDay() === 6)
+            });
+          }
+          currDate.setDate(currDate.getDate() + 1);
+        }
+
+        // 4. 경합 조율 알고리즘 (주말 VOD 우대 -> 평일 블록 분배)
+        timeline.forEach(slot => {
+          if (slot.isWeekend && slot.activeReqs.length > 0) {
+            let vodReqs = slot.activeReqs.filter(r => r.랜딩유형 && r.랜딩유형.includes("VOD 시놉시스"));
+            if (vodReqs.length > 0) {
+              vodReqs.sort((a,b) => (a.assignedDays/a.duration) - (b.assignedDays/b.duration));
+              slot.assignedReq = vodReqs[0];
+              slot.assignedReq.assignedDays++;
+            }
+          }
+        });
+
+        const unassignedSlots = timeline.filter(s => !s.assignedReq);
+        let blocks = [];
+        let currentBlock = null;
+
+        unassignedSlots.forEach(slot => {
+          let reqIds = slot.activeReqs.map(r => r.승인ID).sort().join(",");
+          if (!currentBlock || currentBlock.reqIds !== reqIds) {
+            if (currentBlock) blocks.push(currentBlock);
+            currentBlock = { reqIds, slots: [slot], reqs: slot.activeReqs };
+          } else {
+            currentBlock.slots.push(slot);
+          }
+        });
+        if (currentBlock) blocks.push(currentBlock);
+
+        blocks.forEach(block => {
+          block.reqs.sort((a,b) => (a.assignedDays/a.duration) - (b.assignedDays/b.duration));
+          let numReqs = block.reqs.length;
+          let numSlots = block.slots.length;
+          let slotIdx = 0;
+
+          block.reqs.forEach(req => {
+            let chunk = Math.ceil((numSlots - slotIdx) / numReqs);
+            for (let k = 0; k < chunk; k++) {
+              if (slotIdx < numSlots) {
+                block.slots[slotIdx].assignedReq = req;
+                req.assignedDays++;
+                slotIdx++;
+              }
+            }
+            numReqs--;
           });
-          const result = await response.json();
-          if (result.status === 'success') {
-            alert('✅ 신규 편성 요청이 Admin DB에 등록되었습니다.');
-            setFormData(initialFormState); // 폼 초기화
-            fetchData('getRequests', setRequests); // 목록 새로고침
+        });
+
+        // 5. 결과 매핑
+        const generatedSchedule = [];
+        timeline.forEach(slot => {
+          if(slot.assignedReq) {
+            generatedSchedule.push({
+              실편성ID: "SCH-" + Math.random().toString(36).substr(2, 6).toUpperCase(),
+              편성일자: slot.dateStr,
+              배너유형: slot.assignedReq.배너유형,
+              편성영역: slot.assignedReq.편성영역,
+              구분: slot.assignedReq.printedCount === 0 ? "신규" : "재편성",
+              이벤트명: slot.assignedReq.이벤트명,
+              랜딩세부내용: slot.assignedReq.랜딩세부내용,
+              UNA편성확인: "대기",
+              조율됨: slot.assignedReq.assignedDays < slot.assignedReq.duration // 조율 여부 플래그
+            });
+            slot.assignedReq.printedCount++;
           }
-        } catch (error) {
-          alert('요청 등록 중 오류 발생: ' + error.toString());
-        }
+        });
+
+        setSchedules(generatedSchedule);
         setLoading(false);
+        alert("로컬 자동 편성 시뮬레이션이 완료되었습니다. 내역을 확인하세요.");
       };
 
-      // --- [승인 처리 API 호출] ---
+      // 승인 큐 승인 핸들러
       const handleApprove = async (reqItem) => {
-        if (!window.confirm(`[${reqItem.이벤트명}] 편성을 승인하시겠습니까?`)) return;
+        if (!confirm(`[${reqItem.이벤트명}] 편성을 승인하시겠습니까?`)) return;
         setLoading(true);
         try {
           const response = await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'approveRequest',
-              payload: { ...reqItem, 상태: '승인완료' }
-            })
+            body: JSON.stringify({ action: 'approveRequest', payload: { ...reqItem, 상태: '승인완료' } })
           });
           const result = await response.json();
           if (result.status === 'success') {
-            alert('✅ 마스터 DB로 이관되었습니다.');
             fetchData('getRequests', setRequests);
           }
-        } catch (error) {
-          alert('승인 처리 중 오류 발생: ' + error.toString());
-        }
+        } catch (e) { alert('승인 오류: ' + e); }
         setLoading(false);
       };
 
-      return (
-        <div class="p-6 max-w-screen-2xl mx-auto font-sans">
-          <div class="flex justify-between items-center border-b-2 border-gray-900 pb-4 mb-6">
-            <h1 class="text-2xl font-black text-gray-900">📺 B tv 편성 Admin 시스템 (통합 관제)</h1>
-            {loading && <span class="text-blue-600 font-bold animate-pulse">🔄 시스템 통신 중...</span>}
-          </div>
-
-          <div class="flex gap-2 mb-6">
-            <button onClick={() => setActiveTab('requests')} class={`px-5 py-2.5 font-bold rounded text-sm transition ${activeTab === 'requests' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>📥 신규 편성 데스크</button>
-            <button onClick={() => setActiveTab('approved')} class={`px-5 py-2.5 font-bold rounded text-sm transition ${activeTab === 'approved' ? 'bg-green-600 text-white shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>📋 마스터 승인 원장</button>
-            <button onClick={() => setActiveTab('schedules')} class={`px-5 py-2.5 font-bold rounded text-sm transition ${activeTab === 'schedules' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>📅 실편성 캘린더 엔진</button>
-          </div>
-
-          {activeTab === 'requests' && (
-            <div class="flex flex-col xl:flex-row gap-6">
-              
-              {/* 왼쪽: 편성 요청 폼 (기존 사이드바 UI 대체) */}
-              <div class="w-full xl:w-1/3 bg-white p-5 rounded-lg shadow-md border-t-4 border-blue-500">
-                <h3 class="text-lg font-bold text-gray-800 mb-4 pb-2 border-b">📝 편성 요청서 작성</h3>
-                <form onSubmit={handleSubmit} class="space-y-4">
-                  
-                  <div class="flex gap-4">
-                    <div class="flex-1">
-                      <label class="block text-xs font-bold text-gray-600 mb-1">구분 *</label>
-                      <select name="gubun" value={formData.gubun} onChange={handleChange} class="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400">
-                        <option value="신규">신규</option><option value="재편성">재편성</option>
-                      </select>
-                    </div>
-                    <div class="flex-1">
-                      <label class="block text-xs font-bold text-gray-600 mb-1">담당자 *</label>
-                      <input type="text" name="manager" value={formData.manager} onChange={handleChange} required class="w-full p-2 border rounded text-sm" placeholder="이름 입력"/>
-                    </div>
-                  </div>
-
+      // --- [뷰 렌더링: 승인 대기열 (UI 100% 반영)] ---
+      const renderApprovalQueue = () => {
+        const pending = requests.filter(r => r.상태 === '신규(요청)');
+        return (
+          <div class="flex-1 flex flex-col min-h-0">
+            <div class="p-8">
+              <div class="bg-white border border-gray-200 rounded-xl shadow-sm">
+                <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-white rounded-t-xl">
                   <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-1">편성 대분류 *</label>
-                    <select name="category" value={formData.category} onChange={handleChange} required class="w-full p-2 border rounded text-sm">
-                      <option value="">-- 대분류 선택 --</option>
-                      {Object.keys(SYS_CONFIG.categories).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    <h3 class="text-xl font-bold text-gray-900">Approval Queue</h3>
+                    <p class="text-sm text-gray-500 mt-1">Review and manage banner promotion requests.</p>
+                  </div>
+                  <div class="flex gap-3">
+                    <select class="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none">
+                      <option>Pending Review</option>
+                      <option>Approved</option>
                     </select>
-                  </div>
-
-                  <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-1">배너 유형 *</label>
-                    <select name="bannerType" value={formData.bannerType} onChange={handleChange} required disabled={!formData.category} class="w-full p-2 border rounded text-sm bg-gray-50 disabled:bg-gray-200">
-                      <option value="">-- 배너 유형 선택 --</option>
-                      {formData.category && SYS_CONFIG.categories[formData.category].map(type => <option key={type} value={type}>{type}</option>)}
+                    <select class="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none">
+                      <option>All Areas</option>
+                      <option>WingUI</option>
+                      <option>미니EPG</option>
                     </select>
+                    <button class="border border-gray-300 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 flex items-center gap-2 hover:bg-gray-50">
+                      <i data-feather="filter" class="w-4 h-4"></i> More Filters
+                    </button>
                   </div>
-
-                  {/* 조건부 렌더링: 미니EPG & 배너트리거 */}
-                  {(formData.bannerType === '미니EPG' || formData.bannerType === '일반채널 배너트리거') && (
-                    <div class="p-3 bg-gray-50 border rounded">
-                      <label class="block text-xs font-bold text-gray-600 mb-2">미니 EPG / 일반채널 편성 대상</label>
-                      <div class="flex gap-2 mb-3 bg-gray-200 p-1 rounded">
-                        <label class={`flex-1 text-center py-1 rounded text-xs font-bold cursor-pointer transition ${formData.epgTargetType === 'channel' ? 'bg-white text-blue-600 shadow' : 'text-gray-500'}`}>
-                          <input type="radio" name="epgTargetType" value="channel" onChange={handleChange} checked={formData.epgTargetType === 'channel'} class="hidden"/> 그룹 채널
-                        </label>
-                        {formData.bannerType !== '미니EPG' && (
-                          <label class={`flex-1 text-center py-1 rounded text-xs font-bold cursor-pointer transition ${formData.epgTargetType === 'singleChannel' ? 'bg-white text-blue-600 shadow' : 'text-gray-500'}`}>
-                            <input type="radio" name="epgTargetType" value="singleChannel" onChange={handleChange} checked={formData.epgTargetType === 'singleChannel'} class="hidden"/> 단일 채널
-                          </label>
-                        )}
-                        <label class={`flex-1 text-center py-1 rounded text-xs font-bold cursor-pointer transition ${formData.epgTargetType === 'program' ? 'bg-white text-blue-600 shadow' : 'text-gray-500'}`}>
-                          <input type="radio" name="epgTargetType" value="program" onChange={handleChange} checked={formData.epgTargetType === 'program'} class="hidden"/> 프로그램
-                        </label>
-                      </div>
-
-                      {/* 하위 체크박스 렌더링 */}
-                      {formData.epgTargetType === 'channel' && (
-                        <div class="max-h-32 overflow-y-auto bg-white border p-2 rounded text-sm space-y-1">
-                          {SYS_CONFIG.channelGroups.map(ch => (
-                            <label key={ch} class="flex items-center gap-2 cursor-pointer text-gray-700">
-                              <input type="checkbox" value={ch} checked={formData.targetChannels.includes(ch)} onChange={handleCheckboxChange} class="text-blue-600"/> {ch}
-                            </label>
-                          ))}
-                        </div>
-                      )}
-                      {formData.epgTargetType === 'singleChannel' && (
-                        <div class="max-h-32 overflow-y-auto bg-white border p-2 rounded text-sm space-y-1">
-                          {SYS_CONFIG.singleChannels.map(ch => (
-                            <label key={ch} class="flex items-center gap-2 cursor-pointer text-gray-700">
-                              <input type="checkbox" value={ch} checked={formData.targetChannels.includes(ch)} onChange={handleCheckboxChange} class="text-blue-600"/> {ch}
-                            </label>
-                          ))}
-                        </div>
-                      )}
-                      {formData.epgTargetType === 'program' && (
-                        <input type="text" name="targetDetail" value={formData.targetDetail} onChange={handleChange} class="w-full p-2 border rounded text-sm" placeholder="프로그램명 정확히 기입"/>
-                      )}
-                    </div>
-                  )}
-
-                  {formData.bannerType === '가이드채널 배너트리거' && (
-                    <div>
-                      <label class="block text-xs font-bold text-gray-600 mb-1">OAP 타이틀명 *</label>
-                      <input type="text" name="oapTitle" value={formData.oapTitle} onChange={handleChange} class="w-full p-2 border rounded text-sm" placeholder="예: OAP_여름특집_V1"/>
-                    </div>
-                  )}
-
-                  <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-1">이벤트 / 편성명 *</label>
-                    <input type="text" name="eventName" value={formData.eventName} onChange={handleChange} required class="w-full p-2 border rounded text-sm" placeholder="예: 수요 1+1 무비쿠폰"/>
-                  </div>
-
-                  <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-1">편성 기간 *</label>
-                    <div class="flex gap-2 items-center">
-                      <input type="date" name="startDate" value={formData.startDate} onChange={handleChange} required class="w-full p-2 border rounded text-sm text-gray-700"/>
-                      <span class="text-gray-400">~</span>
-                      <input type="date" name="endDate" value={formData.endDate} min={formData.startDate} onChange={handleChange} required class="w-full p-2 border rounded text-sm text-gray-700"/>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-1">랜딩 유형 *</label>
-                    <select name="landingType" value={formData.landingType} onChange={handleChange} class="w-full p-2 border rounded text-sm">
-                      {SYS_CONFIG.landingTypes.map(type => <option key={type} value={type}>{type}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-1">랜딩 상세 정보</label>
-                    <input type="text" name="landingDetail" value={formData.landingDetail} onChange={handleChange} class="w-full p-2 border rounded text-sm" placeholder="URL, 메뉴경로, CS ID 등 입력"/>
-                  </div>
-
-                  <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-1">이미지 / Jira 링크</label>
-                    <input type="text" name="jiraLink" value={formData.jiraLink} onChange={handleChange} class="w-full p-2 border rounded text-sm" placeholder="https://jira.skbroadband.com/..."/>
-                  </div>
-
-                  <button type="submit" disabled={loading} class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow transition disabled:bg-blue-300">
-                    {loading ? '처리 중...' : '🚀 편성 요청 등록'}
-                  </button>
-                </form>
-              </div>
-
-              {/* 오른쪽: 요청 대기열 목록 */}
-              <div class="w-full xl:w-2/3 bg-white rounded-lg shadow-md border-t-4 border-gray-400 overflow-hidden">
-                <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
-                  <h3 class="text-lg font-bold text-gray-800">📋 대기 중인 신규 요청 현황</h3>
-                  <span class="text-xs font-bold bg-blue-100 text-blue-800 px-2 py-1 rounded-full">{requests.filter(r => r.상태 === '신규(요청)').length}건</span>
                 </div>
-                <div class="overflow-x-auto p-4">
-                  <table class="w-full text-sm text-left">
-                    <thead class="bg-gray-100 text-gray-700 text-center font-bold">
-                      <tr>
-                        <th class="p-3 border">이벤트명</th><th class="p-3 border">배너유형</th><th class="p-3 border">요청기간</th>
-                        <th class="p-3 border">담당자</th><th class="p-3 border">액션</th>
+                
+                <div class="overflow-x-auto">
+                  <table class="w-full text-left border-collapse">
+                    <thead>
+                      <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+                        <th class="py-3 px-6 font-semibold border-b">ID</th>
+                        <th class="py-3 px-6 font-semibold border-b">Promotion Name</th>
+                        <th class="py-3 px-6 font-semibold border-b">Requester</th>
+                        <th class="py-3 px-6 font-semibold border-b">Target Area</th>
+                        <th class="py-3 px-6 font-semibold border-b">Date</th>
+                        <th class="py-3 px-6 font-semibold border-b">Status</th>
+                        <th class="py-3 px-6 font-semibold border-b text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {requests.filter(r => r.상태 === '신규(요청)').map((req) => (
-                        <tr key={req.요청ID} class="text-center border-b hover:bg-gray-50">
-                          <td class="p-3 border text-left font-bold text-gray-900">{req.이벤트명}</td>
-                          <td class="p-3 border text-gray-600">{req.배너유형}</td>
-                          <td class="p-3 border font-mono text-xs">{req.요청시작일} ~ {req.요청종료일}</td>
-                          <td class="p-3 border font-medium">{req.담당자}</td>
-                          <td class="p-3 border">
-                            <button onClick={() => handleApprove(req)} class="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-1.5 rounded text-xs shadow-sm transition">🟢 승인 이관</button>
+                    <tbody class="text-sm divide-y divide-gray-100">
+                      {pending.map(req => (
+                        <tr key={req.요청ID} class="hover:bg-gray-50 transition">
+                          <td class="py-4 px-6 text-gray-500 font-mono text-xs">{req.요청ID}</td>
+                          <td class="py-4 px-6">
+                            <div class="font-bold text-gray-900">{req.이벤트명}</div>
+                            <div class="text-xs text-gray-500 mt-0.5">{req.배너유형}</div>
+                          </td>
+                          <td class="py-4 px-6">
+                            <div class="flex items-center gap-2">
+                              <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{req.담당자.charAt(0)}</div>
+                              <span class="text-gray-700">{req.담당자}</span>
+                            </div>
+                          </td>
+                          <td class="py-4 px-6 text-gray-600">{req.편성영역 || '-'}</td>
+                          <td class="py-4 px-6">
+                            <div class="text-gray-900">{req.요청시작일}</div>
+                            <div class="text-xs text-gray-500">~ {req.요청종료일}</div>
+                          </td>
+                          <td class="py-4 px-6">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                              Pending
+                            </span>
+                          </td>
+                          <td class="py-4 px-6 text-right">
+                            <button onClick={() => handleApprove(req)} class="text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-md text-xs font-semibold shadow-sm transition">Approve</button>
                           </td>
                         </tr>
                       ))}
-                      {requests.filter(r => r.상태 === '신규(요청)').length === 0 && (
-                        <tr><td colSpan="5" class="p-12 text-center text-gray-400 font-medium">현재 대기 중인 요청이 없습니다.</td></tr>
+                      {pending.length === 0 && (
+                        <tr><td colSpan="7" class="py-12 text-center text-gray-500">No pending requests at this time.</td></tr>
                       )}
                     </tbody>
                   </table>
                 </div>
               </div>
-
             </div>
-          )}
+          </div>
+        );
+      };
 
-          {/* 2. 승인 마스터 데이터 화면 (생략 가능, 이전 코드와 동일 구조) */}
-          {activeTab === 'approved' && (
-            <div class="bg-white p-5 rounded-lg shadow-md border-t-4 border-green-500">
-               {/* 이전에 작성해드린 approved 화면 코드와 동일 */}
-               <h3 class="text-lg font-bold text-gray-800 mb-4">✅ 마스터 승인 완료 데이터베이스</h3>
-               <table class="w-full text-sm text-center">
-                  <thead class="bg-green-600 text-white font-bold">
-                    <tr><th class="p-3 border">이벤트명</th><th class="p-3 border">배너유형</th><th class="p-3 border">편성영역</th><th class="p-3 border">승인기간</th><th class="p-3 border">담당자</th></tr>
+      // --- [뷰 렌더링: 편성 캘린더 (알고리즘 탑재)] ---
+      const renderSchedule = () => (
+        <div class="flex-1 flex flex-col min-h-0">
+          <div class="p-8">
+            <div class="bg-white border border-gray-200 rounded-xl shadow-sm">
+              <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-white rounded-t-xl">
+                <div>
+                  <h3 class="text-xl font-bold text-gray-900">Schedule Engine</h3>
+                  <p class="text-sm text-gray-500 mt-1">자동 분배 알고리즘(블록 분산 및 주말 VOD 우대)이 적용된 실편성 캘린더입니다.</p>
+                </div>
+                <button onClick={runAutoSchedule} class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2 transition">
+                  <i data-feather="cpu" class="w-4 h-4"></i> 자동 편성 분배 로직 가동
+                </button>
+              </div>
+              <div class="overflow-x-auto p-4">
+                <table class="w-full text-left text-sm border-collapse">
+                  <thead>
+                    <tr class="bg-gray-100 text-gray-600 uppercase text-xs">
+                      <th class="p-3 font-semibold border-b border-gray-200">편성일자</th>
+                      <th class="p-3 font-semibold border-b border-gray-200">배너유형</th>
+                      <th class="p-3 font-semibold border-b border-gray-200">구분</th>
+                      <th class="p-3 font-semibold border-b border-gray-200">최종 노출 이벤트명</th>
+                      <th class="p-3 font-semibold border-b border-gray-200">랜딩 세부내용</th>
+                      <th class="p-3 font-semibold border-b border-gray-200 text-center">UNA확인</th>
+                    </tr>
                   </thead>
-                  <tbody>
-                    {approved.map((app) => (
-                      <tr key={app.승인ID} class="border-b hover:bg-gray-50">
-                        <td class="p-3 border text-left font-bold">{app.이벤트명}</td><td class="p-3 border">{app.배너유형}</td><td class="p-3 border">{app.편성영역 || '-'}</td>
-                        <td class="p-3 border font-mono">{app.승인시작일} ~ {app.승인종료일}</td><td class="p-3 border">{app.담당자}</td>
+                  <tbody class="divide-y divide-gray-100">
+                    {schedules.map((sch, idx) => (
+                      <tr key={idx} class={`hover:bg-gray-50 ${sch.조율됨 ? 'bg-yellow-50/50' : ''}`}>
+                        <td class="p-3 font-mono font-bold text-gray-800">{sch.편성일자}</td>
+                        <td class="p-3 text-gray-600">{sch.배너유형}</td>
+                        <td class="p-3">
+                          <span class={`px-2 py-0.5 rounded text-xs font-bold ${sch.구분 === '신규' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-700'}`}>{sch.구분}</span>
+                        </td>
+                        <td class="p-3 font-semibold text-gray-900">{sch.이벤트명} {sch.조율됨 && <span class="text-xs text-orange-500 font-normal ml-1">(경합조율)</span>}</td>
+                        <td class="p-3 text-gray-500 truncate max-w-xs">{sch.랜딩세부내용}</td>
+                        <td class="p-3 text-center font-bold text-xs text-red-600">{sch.UNA편성확인}</td>
                       </tr>
                     ))}
+                    {schedules.length === 0 && <tr><td colSpan="6" class="p-8 text-center text-gray-400">데이터가 없습니다. 우측 상단의 자동 편성 버튼을 클릭하세요.</td></tr>}
                   </tbody>
-               </table>
+                </table>
+              </div>
             </div>
-          )}
+          </div>
+        </div>
+      );
 
-          {/* 3. 실편성 타임라인 화면 */}
-          {activeTab === 'schedules' && (
-            <div class="bg-white p-5 rounded-lg shadow-md border-t-4 border-red-500">
-              <h3 class="text-lg font-bold text-gray-800 mb-4">📅 일자별 실편성 분배 현황</h3>
-              <p class="text-gray-500 mb-4 text-sm">추후 여기에 FullCalendar 연동 및 자동 스케줄링 API 트리거 버튼이 결합됩니다.</p>
+      // --- [뷰 렌더링: 신규 요청 작성 폼 (가이드 이미지 연동 반영)] ---
+      const [form, setForm] = React.useState({ category: '', bannerType: '' });
+      
+      const renderRequestForm = () => (
+        <div class="flex-1 flex flex-col min-h-0 overflow-y-auto bg-gray-50 p-8">
+          <div class="max-w-4xl bg-white border border-gray-200 rounded-xl shadow-sm p-8">
+            <h3 class="text-xl font-bold text-gray-900 mb-6 pb-4 border-b">📝 Request New Banner</h3>
+            <div class="grid grid-cols-2 gap-6">
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">편성 대분류</label>
+                <select onChange={(e) => setForm({...form, category: e.target.value, bannerType: ''})} class="w-full border border-gray-300 rounded-md p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                  <option value="">-- 선택 --</option>
+                  {Object.keys(SYS_CONFIG.categories).map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">배너 유형</label>
+                <select value={form.bannerType} onChange={(e) => setForm({...form, bannerType: e.target.value})} disabled={!form.category} class="w-full border border-gray-300 rounded-md p-2.5 text-sm disabled:bg-gray-100 focus:ring-2 focus:ring-blue-500">
+                  <option value="">-- 대분류를 먼저 선택하세요 --</option>
+                  {form.category && SYS_CONFIG.categories[form.category].map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
             </div>
-          )}
+            
+            {/* 가이드 이미지 동적 렌더링 */}
+            <div class="mt-6">
+              <label class="block text-sm font-semibold text-gray-700 mb-2">📸 배너 형태 가이드</label>
+              <div class="w-full h-32 border border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden">
+                {form.bannerType && SYS_CONFIG.bannerImages[form.bannerType] ? (
+                  <img src={SYS_CONFIG.bannerImages[form.bannerType]} alt="Guide" class="object-contain h-full" />
+                ) : (
+                  <span class="text-sm text-gray-400">배너 유형을 지정하면 가이드가 매칭됩니다.</span>
+                )}
+              </div>
+            </div>
+            
+            {/* 임시 하단 버튼 */}
+            <div class="mt-8 flex justify-end">
+              <button class="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition shadow-sm">Submit Request</button>
+            </div>
+          </div>
+        </div>
+      );
+
+      return (
+        <div class="w-full h-full flex bg-[#f8f9fa]">
+          <Sidebar />
+          <div class="flex-1 flex flex-col min-w-0">
+            <Header />
+            {loading && <div class="h-1 w-full bg-blue-100 overflow-hidden relative"><div class="absolute top-0 left-0 h-full bg-blue-600 animate-[pulse_1s_ease-in-out_infinite] w-1/3"></div></div>}
+            
+            {currentView === 'approval' && renderApprovalQueue()}
+            {currentView === 'schedule' && renderSchedule()}
+            {currentView === 'request' && renderRequestForm()}
+            {currentView === 'dashboard' && <div class="p-8 text-gray-500">Dashboard View (To be implemented)</div>}
+          </div>
         </div>
       );
     }
