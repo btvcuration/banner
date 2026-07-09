@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>B tv 편성 Admin 시스템</title>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/feather-icons"></script>
@@ -16,8 +16,6 @@
     .sidebar-item:hover:not(.active) { background-color: #f1f3f4; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-    
-    /* 라디오 탭 스타일 (미니 EPG용) */
     .radio-tab input:checked + div { background-color: #1a73e8; color: white; border-color: #1a73e8; font-weight: bold; }
     .radio-tab div { transition: all 0.2s; }
   </style>
@@ -47,7 +45,7 @@
     };
 
     function App() {
-      const [currentView, setCurrentView] = React.useState('request'); // 기본 뷰를 편성 요청으로
+      const [currentView, setCurrentView] = React.useState('request'); 
       const [requests, setRequests] = React.useState([]);
       const [approved, setApproved] = React.useState([]);
       const [schedules, setSchedules] = React.useState([]);
@@ -66,60 +64,59 @@
       };
 
       React.useEffect(() => {
-        // 모든 탭에서 중복 검사를 위해 기본 데이터를 미리 당겨옵니다.
         fetchData('getRequests', setRequests);
         fetchData('getApproved', setApproved);
       }, []);
 
       const Sidebar = () => (
-        <div class="w-64 bg-white border-r border-gray-200 flex flex-col h-full shrink-0">
-          <div class="p-6 flex items-center gap-3 border-b border-gray-100">
-            <div class="bg-red-600 text-white font-black text-xl w-10 h-10 flex items-center justify-center rounded">B</div>
+        <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-full shrink-0">
+          <div className="p-6 flex items-center gap-3 border-b border-gray-100">
+            <div className="bg-red-600 text-white font-black text-xl w-10 h-10 flex items-center justify-center rounded">B</div>
             <div>
-              <h1 class="font-black text-lg leading-tight">B tv Admin</h1>
-              <p class="text-xs text-gray-500">통합 편성 관제 시스템</p>
+              <h1 className="font-black text-lg leading-tight">B tv Admin</h1>
+              <p className="text-xs text-gray-500">통합 편성 관제 시스템</p>
             </div>
           </div>
-          <nav class="flex-1 py-4 flex flex-col gap-1">
-            <a href="#" onClick={() => setCurrentView('request')} class={`sidebar-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-gray-600 ${currentView === 'request' ? 'active' : ''}`}>
-              <i data-feather="edit-3" class="w-4 h-4"></i> 편성 요청 (신규)
+          <nav className="flex-1 py-4 flex flex-col gap-1">
+            <a href="#request" onClick={(e) => {e.preventDefault(); setCurrentView('request');}} className={`sidebar-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-gray-600 ${currentView === 'request' ? 'active' : ''}`}>
+              <i data-feather="edit-3" className="w-4 h-4"></i> 편성 요청 (신규)
             </a>
-            <a href="#" onClick={() => setCurrentView('approval')} class={`sidebar-item flex items-center justify-between px-6 py-3 text-sm font-medium text-gray-600 ${currentView === 'approval' ? 'active' : ''}`}>
-              <div class="flex items-center gap-3"><i data-feather="check-square" class="w-4 h-4"></i> 승인 대기열</div>
+            <a href="#approval" onClick={(e) => {e.preventDefault(); setCurrentView('approval');}} className={`sidebar-item flex items-center justify-between px-6 py-3 text-sm font-medium text-gray-600 ${currentView === 'approval' ? 'active' : ''}`}>
+              <div className="flex items-center gap-3"><i data-feather="check-square" className="w-4 h-4"></i> 승인 대기열</div>
               {requests.filter(r => r.상태 === '신규(요청)').length > 0 && (
-                <span class="bg-red-100 text-red-600 py-0.5 px-2 rounded-full text-xs font-bold">{requests.filter(r => r.상태 === '신규(요청)').length}</span>
+                <span className="bg-red-100 text-red-600 py-0.5 px-2 rounded-full text-xs font-bold">{requests.filter(r => r.상태 === '신규(요청)').length}</span>
               )}
             </a>
-            <a href="#" onClick={() => setCurrentView('master')} class={`sidebar-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-gray-600 ${currentView === 'master' ? 'active' : ''}`}>
-              <i data-feather="database" class="w-4 h-4"></i> 마스터 원장
+            <a href="#master" onClick={(e) => {e.preventDefault(); setCurrentView('master');}} className={`sidebar-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-gray-600 ${currentView === 'master' ? 'active' : ''}`}>
+              <i data-feather="database" className="w-4 h-4"></i> 마스터 원장
             </a>
-            <a href="#" onClick={() => setCurrentView('schedule')} class={`sidebar-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-gray-600 ${currentView === 'schedule' ? 'active' : ''}`}>
-              <i data-feather="calendar" class="w-4 h-4"></i> 실편성 캘린더
+            <a href="#schedule" onClick={(e) => {e.preventDefault(); setCurrentView('schedule');}} className={`sidebar-item flex items-center gap-3 px-6 py-3 text-sm font-medium text-gray-600 ${currentView === 'schedule' ? 'active' : ''}`}>
+              <i data-feather="calendar" className="w-4 h-4"></i> 실편성 캘린더
             </a>
           </nav>
         </div>
       );
 
       const Header = () => (
-        <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shrink-0">
-          <h2 class="text-lg font-bold text-gray-800">
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shrink-0">
+          <h2 className="text-lg font-bold text-gray-800">
             {currentView === 'request' && '📝 신규 편성 요청서 작성'}
             {currentView === 'approval' && '✅ 승인 대기열 관리'}
             {currentView === 'master' && '📋 마스터 데이터 원장'}
             {currentView === 'schedule' && '📅 실편성 및 조율 캘린더'}
           </h2>
-          <div class="flex items-center gap-6">
-            <button onClick={() => {fetchData('getRequests', setRequests); fetchData('getApproved', setApproved);}} class="text-sm font-bold text-gray-500 hover:text-blue-600 flex items-center gap-1">
-              <i data-feather="refresh-cw" class="w-4 h-4"></i> 데이터 동기화
+          <div className="flex items-center gap-6">
+            <button onClick={() => {fetchData('getRequests', setRequests); fetchData('getApproved', setApproved);}} className="text-sm font-bold text-gray-500 hover:text-blue-600 flex items-center gap-1">
+              <i data-feather="refresh-cw" className="w-4 h-4"></i> 데이터 동기화
             </button>
-            <div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden border border-gray-300">
+            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden border border-gray-300">
               <img src="https://ui-avatars.com/api/?name=Admin&background=0D8ABC&color=fff" alt="Profile" />
             </div>
           </div>
         </header>
       );
 
-      // --- [1. 편성 요청 폼 컴포넌트] ---
+      // --- [1. 편성 요청 폼 상태 및 핸들러] ---
       const [form, setForm] = React.useState({
         gubun: '신규', manager: '', category: '', bannerType: '', 
         epgTargetType: 'channel', targetChannels: [], targetDetail: '', oapTitle: '', 
@@ -131,11 +128,11 @@
         const { name, value } = e.target;
         setForm(prev => {
           let updated = { ...prev, [name]: value };
-          if (name === 'category') updated.bannerType = ''; // 대분류 변경시 배너 리셋
-          // 미니EPG 선택 시 단일채널 옵션 숨김 방어 로직
+          if (name === 'category') updated.bannerType = ''; 
           if (name === 'bannerType' && value === '미니EPG' && prev.epgTargetType === 'singleChannel') {
             updated.epgTargetType = 'channel';
           }
+          if (name === 'startDate' && !prev.endDate) updated.endDate = value;
           return updated;
         });
       };
@@ -150,33 +147,27 @@
 
       const submitRequest = async (e) => {
         e.preventDefault();
-        
-        // 1. 필수값 1차 검증
         if(!form.category || !form.bannerType) {
           alert("편성 대분류와 배너 유형을 선택해주세요."); return;
         }
 
-        // 2. 날짜 중복 (경합) 로직 검증 
+        // 중복/경합 검사 로직
         const sDate = new Date(form.startDate);
         const eDate = new Date(form.endDate);
-        
-        // 기존 요청(대기) + 승인완료 데이터 모두 합쳐서 동일 배너/겹치는 날짜 찾기
         const allData = [...requests, ...approved];
         const overlaps = allData.filter(item => {
           const itemStart = new Date(item.요청시작일 || item.승인시작일);
           const itemEnd = new Date(item.요청종료일 || item.승인종료일);
-          return item.배너유형 === form.bannerType && 
-                 (sDate <= itemEnd && eDate >= itemStart);
+          return item.배너유형 === form.bannerType && (sDate <= itemEnd && eDate >= itemStart);
         });
 
         if (overlaps.length > 0) {
           const overlapNames = overlaps.map(o => `[${o.이벤트명}]`).join(", ");
-          const warningMsg = `⚠️ 주의: 선택하신 기간(${form.startDate} ~ ${form.endDate})에 동일한 배너 영역('${form.bannerType}')을 점유하는 일정이 이미 존재합니다.\n\n경합 대상: ${overlapNames}\n\n그대로 등록 시 알고리즘에 의해 일수가 강제 조율(축소)될 수 있습니다. 계속하시겠습니까?`;
-          if(!confirm(warningMsg)) return; // 취소하면 전송 중단
+          const warningMsg = `⚠️ 주의: 선택하신 기간(${form.startDate} ~ ${form.endDate})에 동일한 배너 영역('${form.bannerType}')을 점유하는 일정이 이미 존재합니다.\n\n경합 대상: ${overlapNames}\n\n등록 시 알고리즘에 의해 일정이 조율될 수 있습니다. 계속하시겠습니까?`;
+          if(!confirm(warningMsg)) return;
         }
 
         setLoading(true);
-        // 타겟 조립
         let finalTarget = form.targetDetail;
         if (form.bannerType.includes('EPG') || form.bannerType.includes('일반채널')) {
           if (form.epgTargetType !== 'program') finalTarget = form.targetChannels.join(' / ');
@@ -204,136 +195,138 @@
       };
 
       const renderRequestForm = () => (
-        <div class="flex-1 overflow-y-auto p-8">
-          <div class="max-w-4xl bg-white border border-gray-200 rounded-xl shadow-sm">
-            <div class="p-6 border-b border-gray-100 bg-gray-50 rounded-t-xl flex justify-between items-center">
-              <h3 class="text-lg font-bold text-gray-800">편성 요청서 양식</h3>
-              <span class="text-xs text-gray-500">* 표시는 필수 항목입니다.</span>
+        <div className="flex-1 overflow-y-auto p-8">
+          <div className="max-w-4xl bg-white border border-gray-200 rounded-xl shadow-sm">
+            <div className="p-6 border-b border-gray-100 bg-gray-50 rounded-t-xl flex justify-between items-center">
+              <h3 className="text-lg font-bold text-gray-800">편성 요청서 양식</h3>
+              <span className="text-xs text-gray-500">* 표시는 필수 항목입니다.</span>
             </div>
-            <form onSubmit={submitRequest} class="p-6 space-y-6">
-              
-              <div class="grid grid-cols-2 gap-6">
+            <form onSubmit={submitRequest} className="p-6 space-y-6">
+              <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">구분 <span class="text-red-500">*</span></label>
-                  <select name="gubun" value={form.gubun} onChange={handleFormChange} class="w-full border border-gray-300 rounded p-2 text-sm focus:border-blue-500 focus:outline-none">
+                  <label className="block text-sm font-bold text-gray-700 mb-2">구분 <span className="text-red-500">*</span></label>
+                  <select name="gubun" value={form.gubun} onChange={handleFormChange} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-blue-500 focus:outline-none">
                     <option value="신규">신규</option><option value="재편성">재편성</option>
                   </select>
                 </div>
                 <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">담당자 <span class="text-red-500">*</span></label>
-                  <input type="text" name="manager" value={form.manager} onChange={handleFormChange} required class="w-full border border-gray-300 rounded p-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="담당자 성함 입력"/>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">담당자 <span className="text-red-500">*</span></label>
+                  <input type="text" name="manager" value={form.manager} onChange={handleFormChange} required className="w-full border border-gray-300 rounded p-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="담당자 성함 입력"/>
                 </div>
               </div>
 
-              <div class="grid grid-cols-2 gap-6 p-4 bg-blue-50/50 rounded-lg border border-blue-100">
+              <div className="grid grid-cols-2 gap-6 p-4 bg-blue-50/50 rounded-lg border border-blue-100">
                 <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">편성 대분류 <span class="text-red-500">*</span></label>
-                  <select name="category" value={form.category} onChange={handleFormChange} required class="w-full border border-gray-300 rounded p-2 text-sm">
+                  <label className="block text-sm font-bold text-gray-700 mb-2">편성 대분류 <span className="text-red-500">*</span></label>
+                  <select name="category" value={form.category} onChange={handleFormChange} required className="w-full border border-gray-300 rounded p-2 text-sm">
                     <option value="">-- 대분류 선택 --</option>
                     {Object.keys(SYS_CONFIG.categories).map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">배너 유형 <span class="text-red-500">*</span></label>
-                  <select name="bannerType" value={form.bannerType} onChange={handleFormChange} required disabled={!form.category} class="w-full border border-gray-300 rounded p-2 text-sm disabled:bg-gray-100">
+                  <label className="block text-sm font-bold text-gray-700 mb-2">배너 유형 <span className="text-red-500">*</span></label>
+                  <select name="bannerType" value={form.bannerType} onChange={handleFormChange} required disabled={!form.category} className="w-full border border-gray-300 rounded p-2 text-sm disabled:bg-gray-100">
                     <option value="">-- 배너 유형 선택 --</option>
                     {form.category && SYS_CONFIG.categories[form.category].map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
               </div>
 
-              {/* 조건부: 미니EPG / 트리거 전용 폼 */}
               {(form.bannerType === '미니EPG' || form.bannerType === '일반채널 배너트리거') && (
-                <div class="border border-gray-200 rounded-lg p-4">
-                  <label class="block text-sm font-bold text-gray-700 mb-3">미니 EPG / 일반채널 편성 대상 설정 <span class="text-red-500">*</span></label>
-                  
-                  <div class="flex gap-2 mb-4 bg-gray-100 p-1 rounded-lg">
-                    <label class="radio-tab flex-1 cursor-pointer">
-                      <input type="radio" name="epgTargetType" value="channel" checked={form.epgTargetType==='channel'} onChange={handleFormChange} class="hidden"/>
-                      <div class="text-center py-2 rounded text-sm text-gray-600 border border-transparent">그룹 채널 다중선택</div>
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <label className="block text-sm font-bold text-gray-700 mb-3">미니 EPG / 일반채널 편성 대상 설정 <span className="text-red-500">*</span></label>
+                  <div className="flex gap-2 mb-4 bg-gray-100 p-1 rounded-lg">
+                    <label className="radio-tab flex-1 cursor-pointer">
+                      <input type="radio" name="epgTargetType" value="channel" checked={form.epgTargetType==='channel'} onChange={handleFormChange} className="hidden"/>
+                      <div className="text-center py-2 rounded text-sm text-gray-600 border border-transparent">그룹 채널 다중선택</div>
                     </label>
                     {form.bannerType !== '미니EPG' && (
-                      <label class="radio-tab flex-1 cursor-pointer">
-                        <input type="radio" name="epgTargetType" value="singleChannel" checked={form.epgTargetType==='singleChannel'} onChange={handleFormChange} class="hidden"/>
-                        <div class="text-center py-2 rounded text-sm text-gray-600 border border-transparent">단일 채널 다중선택</div>
+                      <label className="radio-tab flex-1 cursor-pointer">
+                        <input type="radio" name="epgTargetType" value="singleChannel" checked={form.epgTargetType==='singleChannel'} onChange={handleFormChange} className="hidden"/>
+                        <div className="text-center py-2 rounded text-sm text-gray-600 border border-transparent">단일 채널 다중선택</div>
                       </label>
                     )}
-                    <label class="radio-tab flex-1 cursor-pointer">
-                      <input type="radio" name="epgTargetType" value="program" checked={form.epgTargetType==='program'} onChange={handleFormChange} class="hidden"/>
-                      <div class="text-center py-2 rounded text-sm text-gray-600 border border-transparent">특정 프로그램 직접입력</div>
+                    <label className="radio-tab flex-1 cursor-pointer">
+                      <input type="radio" name="epgTargetType" value="program" checked={form.epgTargetType==='program'} onChange={handleFormChange} className="hidden"/>
+                      <div className="text-center py-2 rounded text-sm text-gray-600 border border-transparent">특정 프로그램 직접입력</div>
                     </label>
                   </div>
 
                   {form.epgTargetType === 'channel' && (
-                    <div class="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto border p-3 rounded bg-white">
+                    <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto border p-3 rounded bg-white">
                       {SYS_CONFIG.channelGroups.map(ch => (
-                        <label key={ch} class="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-1">
-                          <input type="checkbox" value={ch} checked={form.targetChannels.includes(ch)} onChange={handleCheckbox} class="w-4 h-4 text-blue-600"/> {ch}
+                        <label key={ch} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-1">
+                          <input type="checkbox" value={ch} checked={form.targetChannels.includes(ch)} onChange={handleCheckbox} className="w-4 h-4 text-blue-600"/> {ch}
                         </label>
                       ))}
                     </div>
                   )}
                   {form.epgTargetType === 'singleChannel' && (
-                    <div class="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto border p-3 rounded bg-white">
+                    <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto border p-3 rounded bg-white">
                       {SYS_CONFIG.singleChannels.map(ch => (
-                        <label key={ch} class="flex items-center gap-2 text-sm cursor-pointer">
-                          <input type="checkbox" value={ch} checked={form.targetChannels.includes(ch)} onChange={handleCheckbox} class="w-4 h-4"/> {ch}번
+                        <label key={ch} className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input type="checkbox" value={ch} checked={form.targetChannels.includes(ch)} onChange={handleCheckbox} className="w-4 h-4"/> {ch}번
                         </label>
                       ))}
                     </div>
                   )}
                   {form.epgTargetType === 'program' && (
-                    <input type="text" name="targetDetail" value={form.targetDetail} onChange={handleFormChange} class="w-full border rounded p-2 text-sm" placeholder="프로그램명을 정확히 기입해주세요."/>
+                    <input type="text" name="targetDetail" value={form.targetDetail} onChange={handleFormChange} className="w-full border rounded p-2 text-sm" placeholder="프로그램명을 정확히 기입해주세요."/>
                   )}
                 </div>
               )}
 
               {form.bannerType === '가이드채널 배너트리거' && (
                 <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">OAP 타이틀명 <span class="text-red-500">*</span></label>
-                  <input type="text" name="oapTitle" value={form.oapTitle} onChange={handleFormChange} required class="w-full border rounded p-2 text-sm" placeholder="예: OAP_여름특집_V1"/>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">OAP 타이틀명 <span className="text-red-500">*</span></label>
+                  <input type="text" name="oapTitle" value={form.oapTitle} onChange={handleFormChange} required className="w-full border rounded p-2 text-sm" placeholder="예: OAP_여름특집_V1"/>
                 </div>
               )}
 
               <div>
-                <label class="block text-sm font-bold text-gray-700 mb-2">이벤트 / 편성명 <span class="text-red-500">*</span></label>
-                <input type="text" name="eventName" value={form.eventName} onChange={handleFormChange} required class="w-full border border-gray-300 rounded p-2 text-sm" placeholder="예: 수요 1+1 무비쿠폰"/>
+                <label className="block text-sm font-bold text-gray-700 mb-2">이벤트 / 편성명 <span className="text-red-500">*</span></label>
+                <input type="text" name="eventName" value={form.eventName} onChange={handleFormChange} required className="w-full border border-gray-300 rounded p-2 text-sm" placeholder="예: 수요 1+1 무비쿠폰"/>
               </div>
 
               <div>
-                <label class="block text-sm font-bold text-gray-700 mb-2">편성 기간 <span class="text-red-500">*</span></label>
-                <div class="flex items-center gap-2">
-                  <input type="date" name="startDate" value={form.startDate} onChange={handleFormChange} required class="flex-1 border rounded p-2 text-sm"/>
-                  <span class="text-gray-500">~</span>
-                  <input type="date" name="endDate" value={form.endDate} min={form.startDate} onChange={handleFormChange} required class="flex-1 border rounded p-2 text-sm"/>
+                <label className="block text-sm font-bold text-gray-700 mb-2">편성 기간 <span className="text-red-500">*</span></label>
+                <div className="flex items-center gap-2">
+                  <input type="date" name="startDate" value={form.startDate} onChange={handleFormChange} required className="flex-1 border rounded p-2 text-sm"/>
+                  <span className="text-gray-500">~</span>
+                  <input type="date" name="endDate" value={form.endDate} min={form.startDate} onChange={handleFormChange} required className="flex-1 border rounded p-2 text-sm"/>
                 </div>
               </div>
 
-              <div class="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">랜딩 유형 <span class="text-red-500">*</span></label>
-                  <select name="landingType" value={form.landingType} onChange={handleFormChange} class="w-full border rounded p-2 text-sm">
+                  <label className="block text-sm font-bold text-gray-700 mb-2">랜딩 유형 <span className="text-red-500">*</span></label>
+                  <select name="landingType" value={form.landingType} onChange={handleFormChange} className="w-full border rounded p-2 text-sm">
                     {SYS_CONFIG.landingTypes.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">랜딩 상세 내용</label>
-                  <input type="text" name="landingDetail" value={form.landingDetail} onChange={handleFormChange} class="w-full border rounded p-2 text-sm" placeholder="CS ID, URL, 발화어 등 기입"/>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">랜딩 상세 내용</label>
+                  <input type="text" name="landingDetail" value={form.landingDetail} onChange={handleFormChange} className="w-full border rounded p-2 text-sm" placeholder="CS ID, URL, 발화어 등 기입"/>
                 </div>
               </div>
 
               <div>
-                <label class="block text-sm font-bold text-gray-700 mb-2">이미지 가이드라인 확인</label>
-                <div class="w-full h-32 border border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
+                <label className="block text-sm font-bold text-gray-700 mb-2">이미지 가이드라인 확인</label>
+                <div className="w-full h-32 border border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden">
                   {form.bannerType && SYS_CONFIG.bannerImages[form.bannerType] ? (
-                    <img src={SYS_CONFIG.bannerImages[form.bannerType]} alt="Guide" class="object-contain h-full" />
-                  ) : <span class="text-xs text-gray-400">배너 유형 선택 시 가이드가 표시됩니다.</span>}
+                    <img src={SYS_CONFIG.bannerImages[form.bannerType]} alt="Guide" className="object-contain h-full" />
+                  ) : <span className="text-xs text-gray-400">배너 유형 선택 시 가이드가 표시됩니다.</span>}
                 </div>
               </div>
 
-              <div class="pt-4 border-t border-gray-100 flex justify-end">
-                <button type="submit" disabled={loading} class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-sm transition disabled:bg-blue-300 flex items-center gap-2">
-                  {loading ? '처리 중...' : <><i data-feather="send" class="w-4 h-4"></i> 편성 요청서 등록</>}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">이미지 / Jira 링크</label>
+                <input type="text" name="jiraLink" value={form.jiraLink} onChange={handleFormChange} className="w-full border rounded p-2 text-sm" placeholder="https://jira.skbroadband.com/..."/>
+              </div>
+
+              <div className="pt-4 border-t border-gray-100 flex justify-end">
+                <button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-sm transition disabled:bg-blue-300 flex items-center gap-2">
+                  {loading ? '처리 중...' : <><i data-feather="send" className="w-4 h-4"></i> 편성 요청서 등록</>}
                 </button>
               </div>
             </form>
@@ -357,28 +350,28 @@
       const renderApproval = () => {
         const pending = requests.filter(r => r.상태 === '신규(요청)');
         return (
-          <div class="flex-1 overflow-y-auto p-8">
-            <div class="bg-white border border-gray-200 rounded-xl shadow-sm">
-              <div class="p-6 border-b border-gray-100 flex justify-between items-center">
-                <h3 class="text-lg font-bold text-gray-900">승인 대기열 현황</h3>
-                <span class="text-sm text-gray-500">총 {pending.length}건 대기 중</span>
+          <div className="flex-1 overflow-y-auto p-8">
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
+              <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                <h3 className="text-lg font-bold text-gray-900">승인 대기열 현황</h3>
+                <span className="text-sm text-gray-500">총 {pending.length}건 대기 중</span>
               </div>
-              <table class="w-full text-left text-sm">
-                <thead class="bg-gray-50 text-gray-600 border-b">
-                  <tr><th class="p-4">요청ID</th><th class="p-4">이벤트명/배너</th><th class="p-4">담당자</th><th class="p-4">요청기간</th><th class="p-4">상태</th><th class="p-4 text-center">작업</th></tr>
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 text-gray-600 border-b">
+                  <tr><th className="p-4">요청ID</th><th className="p-4">이벤트명/배너</th><th className="p-4">담당자</th><th className="p-4">요청기간</th><th className="p-4">상태</th><th className="p-4 text-center">작업</th></tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100">
                   {pending.map(req => (
-                    <tr key={req.요청ID} class="hover:bg-gray-50">
-                      <td class="p-4 text-xs font-mono text-gray-500">{req.요청ID}</td>
-                      <td class="p-4"><div class="font-bold text-gray-900">{req.이벤트명}</div><div class="text-xs text-gray-500">{req.배너유형}</div></td>
-                      <td class="p-4">{req.담당자}</td>
-                      <td class="p-4 text-xs font-mono">{req.요청시작일} ~ {req.요청종료일}</td>
-                      <td class="p-4"><span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-bold">대기중</span></td>
-                      <td class="p-4 text-center"><button onClick={()=>handleApprove(req)} class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs font-bold">승인하기</button></td>
+                    <tr key={req.요청ID} className="hover:bg-gray-50">
+                      <td className="p-4 text-xs font-mono text-gray-500">{req.요청ID}</td>
+                      <td className="p-4"><div className="font-bold text-gray-900">{req.이벤트명}</div><div className="text-xs text-gray-500">{req.배너유형}</div></td>
+                      <td className="p-4">{req.담당자}</td>
+                      <td className="p-4 text-xs font-mono">{req.요청시작일} ~ {req.요청종료일}</td>
+                      <td className="p-4"><span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-bold">대기중</span></td>
+                      <td className="p-4 text-center"><button onClick={()=>handleApprove(req)} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs font-bold">승인하기</button></td>
                     </tr>
                   ))}
-                  {pending.length === 0 && <tr><td colSpan="6" class="p-12 text-center text-gray-400">대기 중인 요청이 없습니다.</td></tr>}
+                  {pending.length === 0 && <tr><td colSpan="6" className="p-12 text-center text-gray-400">대기 중인 요청이 없습니다.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -386,26 +379,24 @@
         );
       };
 
-      // --- [3. 마스터 / 4. 캘린더 컴포넌트 (알고리즘 연결 등 기존과 동일하게 구성)] ---
-      // (캘린더의 자동 분배 로직은 이전 답변의 runAutoSchedule과 100% 동일하게 동작합니다.)
-      
       return (
-        <div class="w-full h-full flex">
+        <div className="w-full h-full flex">
           <Sidebar />
-          <div class="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0">
             <Header />
-            {loading && <div class="h-1 w-full bg-blue-100 overflow-hidden relative"><div class="absolute top-0 left-0 h-full bg-blue-600 animate-[pulse_1s_ease-in-out_infinite] w-1/3"></div></div>}
+            {loading && <div className="h-1 w-full bg-blue-100 overflow-hidden relative"><div className="absolute top-0 left-0 h-full bg-blue-600 animate-[pulse_1s_ease-in-out_infinite] w-1/3"></div></div>}
             
             {currentView === 'request' && renderRequestForm()}
             {currentView === 'approval' && renderApproval()}
-            {currentView === 'master' && <div class="p-8 text-gray-500 text-center mt-10">승인된 마스터 데이터베이스 화면 영역입니다. (데이터 로드 완료: {approved.length}건)</div>}
-            {currentView === 'schedule' && <div class="p-8 text-gray-500 text-center mt-10">자동 편성 알고리즘 연동 캘린더 영역입니다.</div>}
+            {currentView === 'master' && <div className="p-8 text-gray-500 text-center mt-10">승인된 마스터 데이터베이스 화면 영역입니다. (데이터 로드 완료: {approved.length}건)</div>}
+            {currentView === 'schedule' && <div className="p-8 text-gray-500 text-center mt-10">실편성 및 조율 캘린더 영역입니다.</div>}
           </div>
         </div>
       );
     }
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
+    const container = document.getElementById('root');
+    const root = ReactDOM.createRoot(container);
     root.render(<App />);
   </script>
 </body>
