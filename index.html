@@ -493,24 +493,22 @@
     );
   };
 
-  // --- [뷰 컴포넌트: 4. 편성 팝업 모달] ---
   const EventModal = ({ eventData, events, sysConfig, onClose, onSave, onGoToCalendar }) => {
     const isReadOnly = eventData && eventData.status === 'approved';
     const [form, setForm] = React.useState(eventData || {
       gubun: '신규', title: '', manager: '', bannerType: sysConfig.bannerTypes?.[0] || '미니EPG', 
-      targetChannel: '', targetProgram: '', targetSTB: '전체',
+      epgTargetType: 'channel', targetChannel: '', targetProgram: '', targetSTB: '전체',
       landingType: sysConfig.landingTypes?.[0] || '메뉴 바로가기', 
       landingDepth1: '', landingDepth2: '', landingDetail: '', 
       jiraLink: '', start: '', end: '', duration: '', note: ''
     });
     
     const [overlapWarning, setOverlapWarning] = React.useState(null);
-    const [showChannelNumber, setShowChannelNumber] = React.useState(true); 
-    const [showHistoryModal, setShowHistoryModal] = React.useState(false); // 💡 이력 불러오기 모달 상태
-    
+    const [showChannelNumber, setShowChannelNumber] = React.useState(true);
+    const [showHistoryModal, setShowHistoryModal] = React.useState(false);
     const needsTargeting = ['미니EPG', '가이드채널 배너트리거', '일반채널 배너트리거'].includes(form.bannerType);
 
-    // 랜딩 1/2 Depth 설정 로직
+    // 랜딩 Depth 로직
     const availableLandingDepth1 = React.useMemo(() => {
       if (!sysConfig.landingDetails) return [];
       const d1 = sysConfig.landingDetails.filter(l => l['랜딩 유형'] === '메뉴 바로가기').map(l => l['1Depth']);
@@ -522,31 +520,22 @@
       return sysConfig.landingDetails.filter(l => l['랜딩 유형'] === '메뉴 바로가기' && l['1Depth'] === form.landingDepth1);
     }, [sysConfig.landingDetails, form.landingDepth1]);
 
-    // 채널 분리 렌더링 로직 (단독 vs 그룹 2단 분리 및 번호 숨김 지원)
+    // 채널 로직
     const { standaloneChannels, groupChannels } = React.useMemo(() => {
       if (!sysConfig.channelMap) return { standaloneChannels: [], groupChannels: [] };
       const standaloneNumbers = [0, 1, 52, 70, 71, 88, 974, 982, 986, 987, 988, 989];
       let st = [], gr = [];
-
       Object.entries(sysConfig.channelMap).forEach(([groupName, channels]) => {
         if (/(성인|교육|공공|종교)/.test(groupName)) return;
         const isTerrestrial = groupName.includes("지상파") || groupName.includes("종편");
         let odds = [], evens = [];
-
         channels.forEach(ch => {
           const num = parseInt(ch.num, 10);
           const displayCh = showChannelNumber ? ch.fullName : ch.fullName.replace(/\[\d+번\]\s*/, '');
-          
-          if (standaloneNumbers.includes(num)) {
-            st.push(`[단독선택] ${displayCh}`);
-          } else if (isTerrestrial) {
-            gr.push(`[${groupName}] ${displayCh}`);
-          } else {
-            if (num % 2 !== 0) odds.push(num);
-            else evens.push(num);
-          }
+          if (standaloneNumbers.includes(num)) st.push(`[단독선택] ${displayCh}`);
+          else if (isTerrestrial) gr.push(`[${groupName}] ${displayCh}`);
+          else { if (num % 2 !== 0) odds.push(num); else evens.push(num); }
         });
-
         if (!isTerrestrial) {
           odds.sort((a,b) => a - b); evens.sort((a,b) => a - b);
           if (odds.length > 0) gr.push(`${groupName} 홀수 ${showChannelNumber ? `(${odds.join(', ')})` : ''}`);
@@ -556,22 +545,14 @@
       return { standaloneChannels: st, groupChannels: gr };
     }, [sysConfig.channelMap, showChannelNumber]);
 
-    // 입력 폼 핸들러 (기간 자동 계산 포함)
+    // 핸들러
     const handleChange = (e) => {
       const { name, value } = e.target;
       setForm(prev => {
         const next = { ...prev, [name]: value };
-        
-        // 날짜/기간 양방향 바인딩 로직
-        if (name === 'start' && next.duration) {
-          next.end = calculateEndDate(value, next.duration);
-        } else if (name === 'end' && next.start) {
-          next.duration = calculateDuration(next.start, value);
-        } else if (name === 'duration' && next.start) {
-          next.end = calculateEndDate(next.start, value);
-        }
-
-        // 랜딩 Depth 연동
+        if (name === 'start' && next.duration) next.end = calculateEndDate(value, next.duration);
+        else if (name === 'end' && next.start) next.duration = calculateDuration(next.start, value);
+        else if (name === 'duration' && next.start) next.end = calculateEndDate(next.start, value);
         if (name === 'landingDepth1') { next.landingDepth2 = ''; next.landingDetail = ''; }
         if (name === 'landingDepth2') {
           const selectedObj = availableLandingDepth2.find(l => l['2Depth'] === value);
@@ -589,117 +570,53 @@
       setForm(prev => ({ ...prev, targetChannel: currentList.join(' / ') }));
     };
 
-    const validateAndSave = () => {
-      if(!form.title || !form.manager || !form.start || !form.end) {
-        alert("이벤트명, 담당자, 요청시작일, 요청종료일은 필수 항목입니다."); return;
-      }
-      if(needsTargeting && !form.targetChannel) {
-        alert("편성 대상 채널을 1개 이상 선택해주세요."); return;
-      }
-      onSave(form);
-    };
-
-    React.useEffect(() => {
-      if (isReadOnly || !form.start || !form.end) { setOverlapWarning(null); return; }
-      const newStart = new Date(form.start).getTime();
-      const newEnd = new Date(form.end).getTime();
-      
-      if (needsTargeting) {
-        if (!form.targetChannel) return;
-        const overlaps = events?.filter(e => {
-          if (eventData && e.id === eventData.id) return false; 
-          if (e.bannerType !== form.bannerType) return false;
-          const eStart = new Date(e.start).getTime();
-          const eEnd = new Date(e.end).getTime();
-          const isDateOverlap = (newStart <= eEnd && eStart <= newEnd);
-          const myChans = form.targetChannel.split(' / ');
-          const theirChans = (e.targetChannel || '').split(' / ');
-          const isChannelOverlap = myChans.some(c => theirChans.includes(c));
-          return isDateOverlap && isChannelOverlap;
-        });
-        if (overlaps?.length > 0) {
-          setOverlapWarning({ type: 'block', message: '선택하신 채널/일정에 중복 편성이 있습니다.', items: overlaps.map(o => `[${o.start} ~ ${o.end}] ${o.title}`) });
-          return;
-        }
-      } else if (['WingUI 배너', '편성표 배너'].includes(form.bannerType)) {
-        const overlaps = events?.filter(e => {
-          if (eventData && e.id === eventData.id) return false;
-          if (e.bannerType !== form.bannerType) return false;
-          const eStart = new Date(e.start).getTime();
-          const eEnd = new Date(e.end).getTime();
-          return (newStart <= eEnd && eStart <= newEnd);
-        });
-        if (overlaps?.length > 0) {
-          setOverlapWarning({ type: 'info', message: '해당 기간에 중복 요청이 있어 실편성 시 일자가 조율될 수 있습니다.', items: overlaps.map(o => `[${o.start} ~ ${o.end}] ${o.title}`) });
-          return;
-        }
-      }
-      setOverlapWarning(null);
-    }, [form.start, form.end, form.bannerType, form.targetChannel, needsTargeting]);
-
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center modal-overlay bg-gray-900/60 backdrop-blur-sm p-4">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col modal-content max-h-[95vh] relative">
-          
           <div className={`px-6 py-4 border-b flex justify-between items-center text-white ${isReadOnly ? 'bg-gray-600' : 'bg-[#4f3df6]'}`}>
             <h3 className="font-bold text-lg flex items-center gap-2">
               <FeatherIcon name={isReadOnly ? 'file-text' : 'edit'} className="w-5 h-5"/>
-              {isReadOnly ? '프로모션 상세 (읽기 전용)' : (eventData ? '프로모션 수정' : '신규 프로모션 편성')}
+              {isReadOnly ? '프로모션 상세' : '신규 프로모션 편성'}
             </h3>
             <button onClick={onClose} className="text-white/80 hover:text-white transition-colors"><FeatherIcon name="x" className="w-6 h-6"/></button>
           </div>
 
-          <div className="p-6 overflow-y-auto flex-1 space-y-6 bg-gray-50/30">
-            {/* Section 1: 기본 정보 */}
-            <section className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+          <form id="modalForm" onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="p-6 overflow-y-auto flex-1 space-y-6 bg-gray-50/30">
+            <section className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm relative">
+              <div className="absolute top-0 left-0 w-1.5 h-full bg-[#4f3df6] rounded-l-xl"></div>
               <div className="flex justify-between items-center mb-4">
                 <h4 className="text-sm font-bold text-gray-800 flex items-center gap-2"><FeatherIcon name="info" className="w-4 h-4 text-[#4f3df6]"/> 기본 정보</h4>
-                {/* 💡 재편성 선택 시 이력 불러오기 버튼 노출 */}
                 {form.gubun === '재편성' && !isReadOnly && (
-                  <button type="button" onClick={() => setShowHistoryModal(true)} className="bg-indigo-50 border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors flex items-center gap-1">
+                  <button type="button" onClick={() => setShowHistoryModal(true)} className="bg-indigo-50 border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-100 flex items-center gap-1">
                     <FeatherIcon name="search" className="w-3 h-3"/> 과거 이력 불러오기
                   </button>
                 )}
               </div>
-              
               <div className="grid grid-cols-4 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5">구분</label>
-                  {isReadOnly ? <input value={form.gubun} readOnly className="w-full border rounded-lg p-2 text-sm bg-gray-100"/>
-                  : <select name="gubun" value={form.gubun} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-[#4f3df6]"><option>신규</option><option>재편성</option></select>}
+                  <select name="gubun" value={form.gubun} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none"><option>신규</option><option>재편성</option></select>
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-xs font-bold text-gray-700 mb-1.5">프로모션(이벤트)명 <span className="text-red-500">*</span></label>
-                  <input type="text" name="title" value={form.title} onChange={handleChange} readOnly={isReadOnly} required className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-[#4f3df6]"/>
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">프로모션명</label>
+                  <input type="text" name="title" value={form.title} onChange={handleChange} required className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none"/>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1.5">담당자 <span className="text-red-500">*</span></label>
-                  <input type="text" name="manager" value={form.manager} onChange={handleChange} readOnly={isReadOnly} required className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-[#4f3df6]"/>
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">담당자</label>
+                  <input type="text" name="manager" value={form.manager} onChange={handleChange} required className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none"/>
                 </div>
-                
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5">배너 영역</label>
-                  {isReadOnly ? <input value={form.bannerType} readOnly className="w-full border rounded-lg p-2 text-sm bg-gray-100"/>
-                  : <select name="bannerType" value={form.bannerType} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-[#4f3df6]">{sysConfig.bannerTypes?.map(b => <option key={b} value={b}>{b}</option>)}</select>}
+                  <select name="bannerType" value={form.bannerType} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none">{sysConfig.bannerTypes?.map(b => <option key={b} value={b}>{b}</option>)}</select>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5">대상 STB</label>
-                  <input type="text" name="targetSTB" value={form.targetSTB} onChange={handleChange} readOnly={isReadOnly} className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none"/>
+                  <input type="text" name="targetSTB" value={form.targetSTB} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none"/>
                 </div>
-                
                 <div className="col-span-2 grid grid-cols-3 gap-2 border border-gray-200 rounded-lg p-2 bg-gray-50">
-                  <div>
-                    <label className="block text-[11px] font-bold text-gray-600 mb-1">요청 시작일 <span className="text-red-500">*</span></label>
-                    <input type="date" name="start" value={form.start} onChange={handleChange} readOnly={isReadOnly} className="w-full border border-gray-300 rounded p-1.5 text-sm outline-none focus:ring-1 focus:ring-[#4f3df6]"/>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-gray-600 mb-1">기간 (일)</label>
-                    <input type="number" name="duration" value={form.duration} onChange={handleChange} min="1" readOnly={isReadOnly} placeholder="자동" className="w-full border border-gray-300 rounded p-1.5 text-sm outline-none focus:ring-1 focus:ring-[#4f3df6]"/>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-gray-600 mb-1">요청 종료일 <span className="text-red-500">*</span></label>
-                    <input type="date" name="end" value={form.end} min={form.start} onChange={handleChange} readOnly={isReadOnly} className="w-full border border-gray-300 rounded p-1.5 text-sm outline-none focus:ring-1 focus:ring-[#4f3df6]"/>
-                  </div>
+                  <div><label className="block text-[11px] font-bold text-gray-600 mb-1">시작일</label><input type="date" name="start" value={form.start} onChange={handleChange} required className="w-full border rounded p-1.5 text-sm outline-none"/></div>
+                  <div><label className="block text-[11px] font-bold text-gray-600 mb-1">기간(일)</label><input type="number" name="duration" value={form.duration} onChange={handleChange} className="w-full border rounded p-1.5 text-sm outline-none"/></div>
+                  <div><label className="block text-[11px] font-bold text-gray-600 mb-1">종료일</label><input type="date" name="end" value={form.end} onChange={handleChange} required className="w-full border rounded p-1.5 text-sm outline-none"/></div>
                 </div>
               </div>
             </section>
