@@ -746,7 +746,22 @@ async function injectedFetchDashboard() {
                     if (epList.length > 0) {
                         let prdRes = await $.post('/common/product/layer/ppvPrdList.json', { epsdId: epList[0].epsdId, _csrf: csrf, rows: 50, page: 1 });
                         let prdList = prdRes.result?.contents || prdRes.contents || [];
-                        hasUhd = prdList.some(p => (p.rsluTypCdNm || p.rsluTypNm || "").toUpperCase().includes("UHD"));
+                        hasUhd = prdList.some(p => {
+                            let pStr = JSON.stringify(p).toUpperCase();
+                            if (pStr.includes("HEB")) return false;
+                            
+                            let pocVal = p.pocTypCd || p.poc_typ_cd;
+                            if (pocVal && String(pocVal) !== "10") return false;
+                            
+                            let useStatus = p.useYn || p.prdUseYn || p.epsdPrdUseYn || "Y";
+                            if (String(useStatus).toUpperCase() === "N") return false;
+                            
+                            let endDate = p.prdPrcToDt || p.prcToDt || p.epsdPrdToDt || p.prdToDt || p.sellToDt || "";
+                            let todayStr = new Date().getFullYear() + String(new Date().getMonth()+1).padStart(2,'0') + String(new Date().getDate()).padStart(2,'0');
+                            if (endDate.length >= 8 && endDate.substring(0, 8) < todayStr) return false;
+                            
+                            return (p.rsluTypCdNm || p.rsluTypNm || "").toUpperCase().includes("UHD");
+                        });
                     }
                 } catch(e) {}
 
