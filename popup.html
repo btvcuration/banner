@@ -18,6 +18,10 @@
         .filter-group { display: flex; gap: 8px; font-size: 11px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
         .filter-group label { cursor: pointer; display: flex; align-items: center; gap: 3px; }
         input[type="checkbox"], input[type="radio"] { cursor: pointer; margin:0;}
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            cursor: pointer;
+        }
         
         .calendar-container { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 5px; }
         .cal-box { flex: 1; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 2px; text-align: center; cursor: pointer; min-width: 45px; transition: all 0.2s;}
