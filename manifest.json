@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "NCMS Hub",
+  "version": "4.5",
+  "description": "B tv 메타데이터 및 포스터 일괄 검증 툴",
+  "permissions": ["activeTab", "scripting", "storage", "tabs"],
+  "host_permissions": ["*://ncms.skbroadband.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "NCMS Hub 플로팅 켜기/끄기"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://ncms.skbroadband.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [{
+    "resources": ["popup.html", "popup.js"],
+    "matches": ["*://ncms.skbroadband.com/*"]
+  }]
+}
