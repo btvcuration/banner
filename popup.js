@@ -82,15 +82,15 @@ function initTabs() {
         });
     });
     let today = new Date();
-    let nextWeek = new Date();
-    nextWeek.setDate(today.getDate() - 7);
+    let pastWeek = new Date();
+    pastWeek.setDate(today.getDate() - 7);
     
     let startEl = document.getElementById('exStartDt');
     let endEl = document.getElementById('exEndDt');
     
     if (startEl && endEl) {
-        startEl.value = today.toISOString().split('T')[0];
-        endEl.value = nextWeek.toISOString().split('T')[0];
+        startEl.value = pastWeek.toISOString().split('T')[0]; // 시작일: D-7
+        endEl.value = today.toISOString().split('T')[0];      // 종료일: 오늘
     }
 }
 
@@ -1404,7 +1404,7 @@ async function injectedFetchPriceDrops() {
 // 💡 1단계: 검색된 ID들을 임시 저장할 글로벌 변수
 let excelTargetIds = [];
 
-// 💡 2단계: [1. 대상 검색] 버튼 클릭 이벤트
+// ============ [수정할 부분: searchExcelBtn 리스너 교체] ============
 document.getElementById('searchExcelBtn')?.addEventListener('click', () => {
     let startVal = document.getElementById('exStartDt').value;
     let endVal = document.getElementById('exEndDt').value;
@@ -1415,23 +1415,26 @@ document.getElementById('searchExcelBtn')?.addEventListener('click', () => {
     if (startDt > endDt) return alert("시작일이 종료일보다 늦을 수 없습니다.");
 
     const statusEl = document.getElementById('excelStatus');
+    const resultArea = document.getElementById('excelResultArea'); // 신규 추가
     const searchBtn = document.getElementById('searchExcelBtn');
     const runBtn = document.getElementById('runExcelBtn');
     
     statusEl.innerHTML = "<span style='color:#f59e0b;'>📡 해당 기간의 배포승인 타이틀을 찾고 있습니다...</span>";
+    if (resultArea) resultArea.innerHTML = ""; // 재검색 시 표 초기화
     searchBtn.disabled = true;
     runBtn.disabled = true;
 
-    // 백그라운드로 대상 검색 스크립트만 던짐
-    injectScript(injectedSearchExcelTargets, [startDt, endDt], (resultIds) => {
+    // 백그라운드로 대상 검색 스크립트 실행
+    injectScript(injectedSearchExcelTargets, [startDt, endDt], (resultData) => {
         searchBtn.disabled = false;
         
-        if (!resultIds || resultIds.error) {
+        if (!resultData || resultData.error) {
             statusEl.innerHTML = `<span style='color:var(--accent-red);'>❌ 검색 중 오류 발생</span>`;
             return;
         }
 
-        excelTargetIds = resultIds;
+        // 백그라운드에서 넘어온 ID 배열 저장
+        excelTargetIds = resultData.ids; 
 
         if (excelTargetIds.length === 0) {
             statusEl.innerHTML = "해당 기간에 배포승인된 신규 타이틀이 없습니다.";
@@ -1443,6 +1446,28 @@ document.getElementById('searchExcelBtn')?.addEventListener('click', () => {
         statusEl.innerHTML = `<span style='color:#10b981; font-weight:bold;'>✅ 검색 완료! 총 ${excelTargetIds.length}건의 대상이 발견되었습니다.</span><br>이제 [2. 추출 및 복사] 버튼을 눌러주세요.`;
         runBtn.disabled = false;
         runBtn.style.opacity = '1';
+
+        // 💡 검색된 리스트를 UI 표로 렌더링
+        if (resultArea && resultData.details) {
+            let html = `<table style="width:100%; border-collapse:collapse; text-align:left; margin-top:8px;">`;
+            html += `<tr style="background:var(--bg-dark); border-bottom:1px solid var(--border-color); color:var(--text-sub);">
+                        <th style="padding:4px;">편성일</th>
+                        <th style="padding:4px;">시리즈ID</th>
+                        <th style="padding:4px;">타이틀명</th>
+                     </tr>`;
+            
+            // 편성일자 오름차순으로 정렬하여 렌더링
+            resultData.details.sort((a,b) => a.date.localeCompare(b.date)).forEach(item => {
+                let fDate = item.date.length === 8 ? `${item.date.substring(4,6)}.${item.date.substring(6,8)}` : item.date;
+                html += `<tr style="border-bottom:1px solid #333;">
+                            <td style="padding:4px;">${fDate}</td>
+                            <td style="padding:4px; color:var(--accent-purple);">${item.id}</td>
+                            <td style="padding:4px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:130px;" title="${item.title}">${item.title}</td>
+                         </tr>`;
+            });
+            html += `</table>`;
+            resultArea.innerHTML = html;
+        }
     });
 });
 
@@ -1496,27 +1521,42 @@ async function injectedSearchExcelTargets(startDt, endDt) {
     if (!csrf) return { error: true };
 
     try {
-        // 최대 5000개씩 넉넉히 가져와서 클라이언트에서 필터링
         let tRes = await $.post('/contents/title/titleList.json', { schSvcFrDt: startDt, schSvcToDt: endDt, rows: 5000, page: 1, _csrf: csrf }).catch(()=>({}));
         let sRes = await $.post('/contents/season/seasonList.json', { schSvcFrDt: startDt, schSvcToDt: endDt, rows: 5000, page: 1, _csrf: csrf }).catch(()=>({}));
         
         let tList = tRes.result?.contents || tRes.contents || [];
         let sList = sRes.result?.contents || sRes.contents || [];
         
-        let approvedList = [...tList, ...sList].filter(item => {
-            // 💡 1. 미배포 상태 걸러내기 (RTSP or HLS 배포승인만)
+        let uniqueMap = new Map();
+
+        [...tList, ...sList].forEach(item => {
             let tvStatus = item.tvStatus || item.tv_status || "";
             let tvMdaStatus = item.tvMdaStatus || item.tv_mda_status || "";
             let isApproved = tvStatus.includes("배포승인") || tvMdaStatus.includes("배포승인");
 
-            // 💡 2. 서비스 시작일(svcFrDt)이 실제 검색 기간 내에 들어오는지 2차 정밀 필터링!
             let rawSvcFrDt = (item.svcFrDt || item.svc_fr_dt || "00000000").substring(0, 8);
             let isTargetDate = (rawSvcFrDt >= startDt && rawSvcFrDt <= endDt);
 
-            return isApproved && isTargetDate;
+            if (isApproved && isTargetDate) {
+                let id = item.srisId || item.sris_id;
+                // 중복 방지 및 객체 생성
+                if (id && !uniqueMap.has(id)) {
+                    uniqueMap.set(id, {
+                        id: id,
+                        title: item.srisNm || item.sris_nm || "-",
+                        date: rawSvcFrDt
+                    });
+                }
+            }
         });
 
-        return [...new Set(approvedList.map(item => item.srisId || item.sris_id).filter(id => id))];
+        let details = Array.from(uniqueMap.values());
+        
+        // ID 배열과 상세 데이터 객체를 함께 반환
+        return {
+            ids: details.map(d => d.id),
+            details: details
+        };
     } catch (e) {
         return { error: true };
     }
