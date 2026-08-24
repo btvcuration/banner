@@ -195,7 +195,28 @@
                 <!-- 검색 결과 리스트 렌더링 영역 -->
             </div>
         </div>
-        <!-- 가격 변동 탭 종료 -->
+        <!-- [신규 추가] 엑셀 추출 탭 시작 -->
+        <div id="tab-excel" class="tab-content">
+            <div class="card">
+                <h4 style="color:var(--accent-purple); margin-bottom:10px;">📊 신규 편성 엑셀 추출</h4>
+                <div style="font-size: 11px; color: var(--text-sub); margin-bottom: 12px;">
+                    서비스 시작일을 기준으로 신규 편성된 타이틀 데이터를 추출합니다.
+                </div>
+                
+                <!-- 기간 설정 UI -->
+                <div style="display: flex; gap: 8px; margin-bottom: 15px; align-items: center;">
+                    <input type="date" id="exStartDt" style="flex:1; background:var(--bg-dark); color:white; border:1px solid var(--border-color); border-radius:4px; padding:6px; font-size:11px;">
+                    <span style="color: var(--text-sub); font-weight:bold;">~</span>
+                    <input type="date" id="exEndDt" style="flex:1; background:var(--bg-dark); color:white; border:1px solid var(--border-color); border-radius:4px; padding:6px; font-size:11px;">
+                </div>
+
+                <button id="runExcelBtn" class="run-btn" style="background:#10b981; color:white; padding:12px;">데이터 수집 및 엑셀 복사</button>
+            </div>
+            
+            <div id="excelStatus" style="text-align: center; font-size: 11px; margin-top: 15px; color: var(--text-sub); line-height: 1.5;">
+                원하시는 편성 기간을 설정한 뒤 복사 버튼을 눌러주세요.<br>(데이터 양에 따라 1~2분 정도 소요될 수 있습니다)
+            </div>
+        </div>
 
     </div>
 
@@ -205,6 +226,7 @@
         <div class="nav-item" data-target="tab-poster">포스터 파싱</div>
         <!-- 가격 변동 네비게이션 아이템 추가 -->
         <div class="nav-item" data-target="tab-pricedrop">가격 변동</div>
+        <div class="nav-item" data-target="tab-excel">엑셀추출</div>
     </div>
 
     <script src="popup.js"></script>
