@@ -1489,24 +1489,31 @@ document.getElementById('runExcelBtn')?.addEventListener('click', () => {
 
 
 // ==========================================
-// 🚀 주입용 백그라운드 스크립트 1: 대상 검색만 빠르게 수행
+// 🚀 주입용 백그라운드 스크립트 1: 대상 검색만 빠르게 수행 (날짜 정밀 필터링 적용)
 // ==========================================
 async function injectedSearchExcelTargets(startDt, endDt) {
     const csrf = document.querySelector("input[name='_csrf']")?.value;
     if (!csrf) return { error: true };
 
     try {
-        let tRes = await $.post('/contents/title/titleList.json', { schSvcFrDt: startDt, schSvcToDt: endDt, rows: 1000, page: 1, _csrf: csrf }).catch(()=>({}));
-        let sRes = await $.post('/contents/season/seasonList.json', { schSvcFrDt: startDt, schSvcToDt: endDt, rows: 1000, page: 1, _csrf: csrf }).catch(()=>({}));
+        // 최대 5000개씩 넉넉히 가져와서 클라이언트에서 필터링
+        let tRes = await $.post('/contents/title/titleList.json', { schSvcFrDt: startDt, schSvcToDt: endDt, rows: 5000, page: 1, _csrf: csrf }).catch(()=>({}));
+        let sRes = await $.post('/contents/season/seasonList.json', { schSvcFrDt: startDt, schSvcToDt: endDt, rows: 5000, page: 1, _csrf: csrf }).catch(()=>({}));
         
         let tList = tRes.result?.contents || tRes.contents || [];
         let sList = sRes.result?.contents || sRes.contents || [];
         
-        // 💡 미배포 상태 걸러내기 (RTSP or HLS 배포승인만)
         let approvedList = [...tList, ...sList].filter(item => {
+            // 💡 1. 미배포 상태 걸러내기 (RTSP or HLS 배포승인만)
             let tvStatus = item.tvStatus || item.tv_status || "";
             let tvMdaStatus = item.tvMdaStatus || item.tv_mda_status || "";
-            return tvStatus.includes("배포승인") || tvMdaStatus.includes("배포승인");
+            let isApproved = tvStatus.includes("배포승인") || tvMdaStatus.includes("배포승인");
+
+            // 💡 2. 서비스 시작일(svcFrDt)이 실제 검색 기간 내에 들어오는지 2차 정밀 필터링!
+            let rawSvcFrDt = (item.svcFrDt || item.svc_fr_dt || "00000000").substring(0, 8);
+            let isTargetDate = (rawSvcFrDt >= startDt && rawSvcFrDt <= endDt);
+
+            return isApproved && isTargetDate;
         });
 
         return [...new Set(approvedList.map(item => item.srisId || item.sris_id).filter(id => id))];
