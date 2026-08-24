@@ -1514,7 +1514,7 @@ document.getElementById('runExcelBtn')?.addEventListener('click', () => {
 
 
 // ==========================================
-// 🚀 주입용 백그라운드 스크립트 1: 대상 검색만 빠르게 수행 (일반 VOD 전용)
+// 🚀 주입용 백그라운드 스크립트 1: 대상 검색만 빠르게 수행 (일반 VOD 전용, OTT 차단)
 // ==========================================
 async function injectedSearchExcelTargets(startDt, endDt) {
     const csrf = document.querySelector("input[name='_csrf']")?.value;
@@ -1530,28 +1530,31 @@ async function injectedSearchExcelTargets(startDt, endDt) {
         let uniqueMap = new Map();
 
         [...tList, ...sList].forEach(item => {
-            // 💡 1. 미배포 상태 걸러내기
+            // 1. 미배포 상태 걸러내기
             let tvStatus = item.tvStatus || item.tv_status || "";
             let tvMdaStatus = item.tvMdaStatus || item.tv_mda_status || "";
             let isApproved = tvStatus.includes("배포승인") || tvMdaStatus.includes("배포승인");
 
-            // 💡 2. 편성일자 정밀 필터링
+            // 2. 편성일자 정밀 필터링
             let rawSvcFrDt = (item.svcFrDt || item.svc_fr_dt || "00000000").substring(0, 8);
             let isTargetDate = (rawSvcFrDt >= startDt && rawSvcFrDt <= endDt);
 
-            // 💡 3. 서비스 유형 '일반 VOD' 전용 필터링
+            // 3. 서비스 유형 '일반 VOD' 전용 필터링
             let sTypNm = item.svcTypNm || item.svc_typ_nm || "";
             let sTypCd = String(item.svcTypCd || item.svc_typ_cd || "");
-            let isGeneralVod = sTypNm.includes("일반 VOD") || sTypCd === "30"; // 30은 일반 VOD 코드
+            let isGeneralVod = sTypNm.includes("일반 VOD") || sTypCd === "30";
 
-            // 세 가지 조건을 모두 만족하는 진짜 데이터만 취합!
-            if (isApproved && isTargetDate && isGeneralVod) {
+            // 💡 4. VOD 미사용(N) 데이터 완벽 차단! (추적 스크립트 결과 반영)
+            let vodSvcYn = item.vodSvcYn || item.vod_svc_yn || "Y"; 
+            let isOttExclusive = (vodSvcYn === "N");
+
+            // 모든 조건을 만족하고, 미사용(N)이 아닌 진짜 데이터만 취합
+            if (isApproved && isTargetDate && isGeneralVod && !isOttExclusive) {
                 let id = item.srisId || item.sris_id;
-                // 중복 방지 및 객체 생성
                 if (id && !uniqueMap.has(id)) {
                     uniqueMap.set(id, {
                         id: id,
-                        title: item.srisNm || item.sris_nm || "-",
+                        title: item.srisNm || item.sris_nm || "",
                         date: rawSvcFrDt
                     });
                 }
@@ -1560,7 +1563,6 @@ async function injectedSearchExcelTargets(startDt, endDt) {
 
         let details = Array.from(uniqueMap.values());
         
-        // ID 배열과 상세 데이터 객체를 함께 반환
         return {
             ids: details.map(d => d.id),
             details: details
@@ -1571,14 +1573,13 @@ async function injectedSearchExcelTargets(startDt, endDt) {
 }
 
 // ==========================================
-// 🚀 주입용 백그라운드 스크립트 2: Chunk 단위 병렬 추출 엔진 (정렬 및 포맷 최적화)
+// 🚀 주입용 백그라운드 스크립트 2: 병렬 추출 엔진 (빈칸 통일 및 최신순 정렬)
 // ==========================================
 async function injectedParallelExcelExport(targetSrisIds) {
     const csrf = document.querySelector("input[name='_csrf']")?.value;
     if (!csrf) return { error: true };
 
     let tsvOutput = ""; 
-    
     const today = new Date();
     const todayStr = today.getFullYear() + String(today.getMonth() + 1).padStart(2, '0') + String(today.getDate()).padStart(2, '0');
 
@@ -1598,7 +1599,7 @@ async function injectedParallelExcelExport(targetSrisIds) {
     };
 
     const CHUNK_SIZE = 5;
-    let extractedRows = []; // 💡 정렬을 위해 객체 배열로 변경
+    let extractedRows = []; 
 
     for (let i = 0; i < targetSrisIds.length; i += CHUNK_SIZE) {
         const chunkIds = targetSrisIds.slice(i, i + CHUNK_SIZE);
@@ -1610,29 +1611,32 @@ async function injectedParallelExcelExport(targetSrisIds) {
                 let isSeason = !!(detail?.result?.seasonInfo?.metaTypNm || detail?.seasonInfo?.metaTypNm);
                 if (!isSeason) detail = await $.post('/contents/title/titleSelect.json', { srisId, _csrf: csrf }).catch(()=>null);
                 
-                // 💡 1. 시리즈 유형 출력 텍스트 변경 (시즌 / 타이틀)
+                // 💡 2차 방어망: 상세 데이터 내에서도 vodSvcYn === N 이면 버림
+                let vodSvcYn = findValueDeep(detail, ["vodSvcYn", "vod_svc_yn"]) || "Y";
+                if (vodSvcYn === "N") return [];
+
                 const seriesType = isSeason ? "시즌" : "타이틀";
-                
-                let srisNm = findValueDeep(detail, ["srisNm", "sris_nm"]) || "-";
+                let srisNm = findValueDeep(detail, ["srisNm", "sris_nm"]) || ""; // 하이픈 대신 빈칸
                 let metaId = findValueDeep(detail, ["metaId", "meta_id"]) || "";
                 let rawSvcFrDt = String(findValueDeep(detail, ["svcFrDt", "svc_fr_dt"]) || "");
                 let svcFrDt = rawSvcFrDt.length >= 8 ? `${rawSvcFrDt.substring(0,4)}-${rawSvcFrDt.substring(4,6)}-${rawSvcFrDt.substring(6,8)}` : rawSvcFrDt;
-                let sortDate = rawSvcFrDt || "00000000"; // 정렬용 날짜 저장
+                let sortDate = rawSvcFrDt || "00000000"; 
 
                 let targetEpsdIds = [];
                 let epRes = await $.post('/contents/episode/episodeList.json', { srisId, _csrf: csrf, rows: 200, page: 1 }).catch(()=>({}));
                 let epList = epRes?.result?.contents || epRes?.contents || [];
-                let metaTypNm = "-", svcTypNm = "-";
+                
+                // 💡 모든 속성 초기값을 하이픈 대신 빈칸("")으로 변경
+                let metaTypNm = "", svcTypNm = "";
                 let epsdTypNm = "본편"; 
 
                 if (epList.length > 0) {
-                    metaTypNm = epList[0].metaTypNm || epList[0].meta_typ_nm || "-";
-                    svcTypNm = epList[0].svcTypNm || epList[0].svc_typ_nm || "-";
+                    metaTypNm = epList[0].metaTypNm || epList[0].meta_typ_nm || "";
+                    svcTypNm = epList[0].svcTypNm || epList[0].svc_typ_nm || "";
                     let mainEps = epList.filter(e => e.pcimTypCd === "10" || String(e.epsdTypNm).includes("본편") || String(e.epsdTypNm).includes("영화"));
                     if (mainEps.length === 0) mainEps = epList;
                     mainEps.sort((a, b) => parseInt(a.brcastTmsVal || 999) - parseInt(b.brcastTmsVal || 999));
                     targetEpsdIds = mainEps.slice(0, 3).map(e => e.epsdId);
-                    
                     if (mainEps.length > 0) epsdTypNm = mainEps[0].epsdTypNm || "본편";
                 }
 
@@ -1641,7 +1645,7 @@ async function injectedParallelExcelExport(targetSrisIds) {
                     if (fallbackEp) targetEpsdIds.push(fallbackEp);
                 }
 
-                let cpNm = "-";
+                let cpNm = "";
                 let cpRes = await $.post('/common/contents/layer/pocContractList.json', { srisId: srisId, pocTypCd: "10", _csrf: csrf }).catch(()=>null);
                 let cpList = cpRes?.result?.contents || cpRes?.contents || [];
                 if (cpList.length === 0 && targetEpsdIds.length > 0) {
@@ -1649,29 +1653,34 @@ async function injectedParallelExcelExport(targetSrisIds) {
                     cpList = cpRes?.result?.contents || cpRes?.contents || [];
                 }
                 if (cpList.length > 0) cpNm = [...new Set(cpList.map(c => c.contrpNm))].join(", ");
-                else cpNm = findValueDeep(detail, ["cpNm", "cp_nm", "ptnrNm", "cnptNm"]) || "-";
+                else cpNm = findValueDeep(detail, ["cpNm", "cp_nm", "ptnrNm", "cnptNm"]) || "";
 
-                let nscrnYn = "-";
+                // 💡 최후 방어망: CP명에 OTT AGG가 포함되어 있다면 (혹시 모를 예외 방어) 버림
+                if (cpNm.toUpperCase().includes("OTT")) {
+                    return [];
+                }
+
+                let nscrnYn = "";
                 if (targetEpsdIds.length > 0) {
                     let epDetail = await $.post('/contents/episode/episodeSelect.json', { epsdId: targetEpsdIds[0], _csrf: csrf }).catch(()=>null);
-                    nscrnYn = findValueDeep(epDetail, ["nscrnYn", "nscrn_yn"]) || "-";
+                    nscrnYn = findValueDeep(epDetail, ["nscrnYn", "nscrn_yn"]) || "";
                     if (metaId === "") metaId = findValueDeep(epDetail, ["metaId", "meta_id"]) || "";
-                    if (metaTypNm === "-") metaTypNm = findValueDeep(epDetail, ["metaTypNm", "meta_typ_nm"]) || "-";
-                    if (svcTypNm === "-") svcTypNm = findValueDeep(epDetail, ["svcTypNm", "svc_typ_nm"]) || "-";
+                    if (metaTypNm === "") metaTypNm = findValueDeep(epDetail, ["metaTypNm", "meta_typ_nm"]) || "";
+                    if (svcTypNm === "") svcTypNm = findValueDeep(epDetail, ["svcTypNm", "svc_typ_nm"]) || "";
                 }
-                if(metaTypNm === "-") metaTypNm = findValueDeep(detail, ["metaTypNm", "meta_typ_nm"]) || "-";
-                if(svcTypNm === "-") svcTypNm = findValueDeep(detail, ["svcTypNm", "svc_typ_nm"]) || "-";
-                if(nscrnYn === "-") nscrnYn = findValueDeep(detail, ["nscrnYn", "nscrn_yn"]) || "-";
+                if(metaTypNm === "") metaTypNm = findValueDeep(detail, ["metaTypNm", "meta_typ_nm"]) || "";
+                if(svcTypNm === "") svcTypNm = findValueDeep(detail, ["svcTypNm", "svc_typ_nm"]) || "";
+                if(nscrnYn === "") nscrnYn = findValueDeep(detail, ["nscrnYn", "nscrn_yn"]) || "";
 
                 let nscrnFormat = nscrnYn === "Y" ? "YES" : (nscrnYn === "N" ? "NO" : nscrnYn);
 
-                let parCdNm = "-", catCdNm = "-";
+                let parCdNm = "", catCdNm = "";
                 if (metaId) {
                     let relRes = await $.post('/meta/contentsMetaRelation.json', { metaId, _csrf: csrf }).catch(()=>null);
                     let catArr = relRes?.result?.metaCatCdInfo || relRes?.metaCatCdInfo || [];
                     if (catArr.length > 0) {
-                        parCdNm = catArr[0].parCdNm || "-";
-                        catCdNm = catArr[0].catCdNm || "-";
+                        parCdNm = catArr[0].parCdNm || "";
+                        catCdNm = catArr[0].catCdNm || "";
                     }
                 }
 
@@ -1690,7 +1699,7 @@ async function injectedParallelExcelExport(targetSrisIds) {
                     });
                     
                     if (ppvList.length > 0) ppvList.forEach(p => priceSet.add(p.prdPrice || p.prdPrc || "0"));
-                    else priceSet.add("0"); 
+                    else priceSet.add(""); // 가격 없음도 빈칸 처리
 
                     let ppmRes = await $.post('/common/product/layer/ppmPrdList.json', { epsdId, _csrf: csrf, rows: 100, page: 1 }).catch(()=>null);
                     let ppmList = (ppmRes?.result?.contents || ppmRes?.contents || []).filter(p => {
@@ -1705,27 +1714,15 @@ async function injectedParallelExcelExport(targetSrisIds) {
                     if (ppmList.length > 0) ppmList.forEach(p => ppmSet.add(p.prdNm || p.prd_nm));
                 }
 
-                if (priceSet.size === 0) priceSet.add("-");
-                let ppmString = ppmSet.size > 0 ? Array.from(ppmSet).join(", ") : "-";
+                if (priceSet.size === 0) priceSet.add("");
+                let ppmString = ppmSet.size > 0 ? Array.from(ppmSet).join(", ") : ""; // 월정액 없음도 빈칸 처리
 
-                // 💡 2. 배열 조립 시 객체에 date 정보를 포함 (추후 정렬용) 및 14번 항목 삭제
                 priceSet.forEach(price => {
                     rowData.push({
                         date: sortDate,
                         tsv: [
-                            parCdNm,            // 1. 대분류
-                            catCdNm,            // 2. 중분류
-                            srisNm,             // 3. 타이틀명
-                            srisId,             // 4. 시리즈ID
-                            metaTypNm,          // 5. 메타유형
-                            cpNm,               // 6. CP명
-                            seriesType,         // 7. 시리즈유형 (시즌/타이틀)
-                            "10",               // 8. 영상유형/PoC
-                            epsdTypNm,          // 9. 에피소드유형
-                            svcFrDt,            // 10. 서비스시작일
-                            price,              // 11. PPV가격
-                            ppmString,          // 12. 월정액상품
-                            nscrnFormat         // 13. N스크린
+                            parCdNm, catCdNm, srisNm, srisId, metaTypNm, cpNm, seriesType,
+                            "10", epsdTypNm, svcFrDt, price, ppmString, nscrnFormat
                         ].join("\t")
                     });
                 });
@@ -1739,10 +1736,9 @@ async function injectedParallelExcelExport(targetSrisIds) {
         });
     }
 
-    // 💡 3. 편성 일시(최근 순) 내림차순 정렬 적용
+    // 최신 날짜 순(내림차순) 정렬
     extractedRows.sort((a, b) => b.date.localeCompare(a.date));
 
-    // 정렬된 배열에서 텍스트(tsv)만 뽑아서 합침
     if(extractedRows.length > 0) {
         tsvOutput += extractedRows.map(row => row.tsv).join("\n") + "\n";
     }
