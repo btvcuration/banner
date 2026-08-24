@@ -1563,13 +1563,13 @@ async function injectedSearchExcelTargets(startDt, endDt) {
 }
 
 // ==========================================
-// 🚀 주입용 백그라운드 스크립트 2: Chunk 단위 병렬 추출 엔진
+// 🚀 주입용 백그라운드 스크립트 2: Chunk 단위 병렬 추출 엔진 (정렬 및 포맷 최적화)
 // ==========================================
 async function injectedParallelExcelExport(targetSrisIds) {
     const csrf = document.querySelector("input[name='_csrf']")?.value;
     if (!csrf) return { error: true };
 
-    let tsvOutput = "카테고리구분_메타\t서브카테고리구분(메타)\t시리즈ID\t콘텐츠메타유형\t계약처명(시리즈)\t시리즈유형\t영상유형\t서비스시작일시\tPPV판매가격\t콘텐츠상품명\tN스크린여부\t월정액상품명\n";
+    let tsvOutput = ""; 
     
     const today = new Date();
     const todayStr = today.getFullYear() + String(today.getMonth() + 1).padStart(2, '0') + String(today.getDate()).padStart(2, '0');
@@ -1589,31 +1589,33 @@ async function injectedParallelExcelExport(targetSrisIds) {
         search(obj); return result;
     };
 
-    // 💡 병목 해소를 위해 Promise.all 활용 (한 번에 5개씩 묶어서 병렬 호출)
     const CHUNK_SIZE = 5;
-    let extractedRows = [];
+    let extractedRows = []; // 💡 정렬을 위해 객체 배열로 변경
 
     for (let i = 0; i < targetSrisIds.length; i += CHUNK_SIZE) {
         const chunkIds = targetSrisIds.slice(i, i + CHUNK_SIZE);
         
-        // 5개 단위로 동시 파싱 진행!
         const chunkResults = await Promise.all(chunkIds.map(async (srisId) => {
-            let rowStrings = [];
+            let rowData = [];
             try {
                 let detail = await $.post('/contents/season/seasonSelect.json', { srisId, _csrf: csrf }).catch(()=>null);
                 let isSeason = !!(detail?.result?.seasonInfo?.metaTypNm || detail?.seasonInfo?.metaTypNm);
                 if (!isSeason) detail = await $.post('/contents/title/titleSelect.json', { srisId, _csrf: csrf }).catch(()=>null);
                 
-                const seriesType = isSeason ? "시즌" : "본편";
+                // 💡 1. 시리즈 유형 출력 텍스트 변경 (시즌 / 타이틀)
+                const seriesType = isSeason ? "시즌" : "타이틀";
+                
                 let srisNm = findValueDeep(detail, ["srisNm", "sris_nm"]) || "-";
                 let metaId = findValueDeep(detail, ["metaId", "meta_id"]) || "";
                 let rawSvcFrDt = String(findValueDeep(detail, ["svcFrDt", "svc_fr_dt"]) || "");
                 let svcFrDt = rawSvcFrDt.length >= 8 ? `${rawSvcFrDt.substring(0,4)}-${rawSvcFrDt.substring(4,6)}-${rawSvcFrDt.substring(6,8)}` : rawSvcFrDt;
+                let sortDate = rawSvcFrDt || "00000000"; // 정렬용 날짜 저장
 
                 let targetEpsdIds = [];
                 let epRes = await $.post('/contents/episode/episodeList.json', { srisId, _csrf: csrf, rows: 200, page: 1 }).catch(()=>({}));
                 let epList = epRes?.result?.contents || epRes?.contents || [];
                 let metaTypNm = "-", svcTypNm = "-";
+                let epsdTypNm = "본편"; 
 
                 if (epList.length > 0) {
                     metaTypNm = epList[0].metaTypNm || epList[0].meta_typ_nm || "-";
@@ -1622,6 +1624,8 @@ async function injectedParallelExcelExport(targetSrisIds) {
                     if (mainEps.length === 0) mainEps = epList;
                     mainEps.sort((a, b) => parseInt(a.brcastTmsVal || 999) - parseInt(b.brcastTmsVal || 999));
                     targetEpsdIds = mainEps.slice(0, 3).map(e => e.epsdId);
+                    
+                    if (mainEps.length > 0) epsdTypNm = mainEps[0].epsdTypNm || "본편";
                 }
 
                 if (targetEpsdIds.length === 0) {
@@ -1650,6 +1654,8 @@ async function injectedParallelExcelExport(targetSrisIds) {
                 if(metaTypNm === "-") metaTypNm = findValueDeep(detail, ["metaTypNm", "meta_typ_nm"]) || "-";
                 if(svcTypNm === "-") svcTypNm = findValueDeep(detail, ["svcTypNm", "svc_typ_nm"]) || "-";
                 if(nscrnYn === "-") nscrnYn = findValueDeep(detail, ["nscrnYn", "nscrn_yn"]) || "-";
+
+                let nscrnFormat = nscrnYn === "Y" ? "YES" : (nscrnYn === "N" ? "NO" : nscrnYn);
 
                 let parCdNm = "-", catCdNm = "-";
                 if (metaId) {
@@ -1694,25 +1700,44 @@ async function injectedParallelExcelExport(targetSrisIds) {
                 if (priceSet.size === 0) priceSet.add("-");
                 let ppmString = ppmSet.size > 0 ? Array.from(ppmSet).join(", ") : "-";
 
-                // 배열로 행(Row) 데이터를 조립하여 리턴
+                // 💡 2. 배열 조립 시 객체에 date 정보를 포함 (추후 정렬용) 및 14번 항목 삭제
                 priceSet.forEach(price => {
-                    rowStrings.push([
-                        parCdNm, catCdNm, srisId, metaTypNm, cpNm, seriesType, svcTypNm,
-                        svcFrDt, price, srisNm, nscrnYn, ppmString
-                    ].join("\t"));
+                    rowData.push({
+                        date: sortDate,
+                        tsv: [
+                            parCdNm,            // 1. 대분류
+                            catCdNm,            // 2. 중분류
+                            srisNm,             // 3. 타이틀명
+                            srisId,             // 4. 시리즈ID
+                            metaTypNm,          // 5. 메타유형
+                            cpNm,               // 6. CP명
+                            seriesType,         // 7. 시리즈유형 (시즌/타이틀)
+                            "10",               // 8. 영상유형/PoC
+                            epsdTypNm,          // 9. 에피소드유형
+                            svcFrDt,            // 10. 서비스시작일
+                            price,              // 11. PPV가격
+                            ppmString,          // 12. 월정액상품
+                            nscrnFormat         // 13. N스크린
+                        ].join("\t")
+                    });
                 });
 
             } catch (err) {}
-            return rowStrings;
+            return rowData;
         }));
         
-        // 5개씩 파싱 완료된 결과들을 원본 배열에 결합
         chunkResults.forEach(rows => {
             if(rows.length > 0) extractedRows.push(...rows);
         });
     }
 
-    if(extractedRows.length > 0) tsvOutput += extractedRows.join("\n") + "\n";
+    // 💡 3. 편성 일시(최근 순) 내림차순 정렬 적용
+    extractedRows.sort((a, b) => b.date.localeCompare(a.date));
+
+    // 정렬된 배열에서 텍스트(tsv)만 뽑아서 합침
+    if(extractedRows.length > 0) {
+        tsvOutput += extractedRows.map(row => row.tsv).join("\n") + "\n";
+    }
     
     return { data: tsvOutput };
 }
