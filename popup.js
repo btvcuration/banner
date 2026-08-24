@@ -81,6 +81,17 @@ function initTabs() {
             if(activeBox) renderDayList(activeBox.dataset.date);
         });
     });
+    let today = new Date();
+    let nextWeek = new Date();
+    nextWeek.setDate(today.getDate() - 7);
+    
+    let startEl = document.getElementById('exStartDt');
+    let endEl = document.getElementById('exEndDt');
+    
+    if (startEl && endEl) {
+        startEl.value = today.toISOString().split('T')[0];
+        endEl.value = nextWeek.toISOString().split('T')[0];
+    }
 }
 
 function injectScript(funcName, argsArray, callback) {
@@ -1446,6 +1457,12 @@ async function injectedDateRangeExport(startDt, endDt) {
         
         let tList = tRes.result?.contents || tRes.contents || [];
         let sList = sRes.result?.contents || sRes.contents || [];
+
+        let approvedList = [...tList, ...sList].filter(item => {
+            let tvStatus = item.tvStatus || item.tv_status || "";
+            let tvMdaStatus = item.tvMdaStatus || item.tv_mda_status || "";
+            return tvStatus.includes("배포승인") || tvMdaStatus.includes("배포승인");
+        });
         
         let targetSrisIds = [...new Set([...tList, ...sList].map(item => item.srisId || item.sris_id).filter(id => id))];
         
