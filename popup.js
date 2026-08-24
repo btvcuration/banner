@@ -1410,10 +1410,10 @@ async function injectedFetchPriceDrops() {
 // 🚀 신규 기능: 기간 검색 -> 병렬 추출 -> 복사 (3단계 분리 아키텍처)
 // ==========================================
 
-// 💡 1단계: 검색된 ID들을 임시 저장할 글로벌 변수
-let excelTargetIds = [];
+// 💡 1단계: 검색된 '객체(ID 및 시즌여부 포함)'들을 임시 저장할 글로벌 변수
+let excelTargetDetails = [];
 
-// ============ [수정할 부분: searchExcelBtn 리스너 교체] ============
+// 💡 2단계: [1. 대상 검색] 버튼 클릭 이벤트
 document.getElementById('searchExcelBtn')?.addEventListener('click', () => {
     let startVal = document.getElementById('exStartDt').value;
     let endVal = document.getElementById('exEndDt').value;
@@ -1424,16 +1424,15 @@ document.getElementById('searchExcelBtn')?.addEventListener('click', () => {
     if (startDt > endDt) return alert("시작일이 종료일보다 늦을 수 없습니다.");
 
     const statusEl = document.getElementById('excelStatus');
-    const resultArea = document.getElementById('excelResultArea'); // 신규 추가
+    const resultArea = document.getElementById('excelResultArea');
     const searchBtn = document.getElementById('searchExcelBtn');
     const runBtn = document.getElementById('runExcelBtn');
     
     statusEl.innerHTML = "<span style='color:#f59e0b;'>📡 해당 기간의 배포승인 타이틀을 찾고 있습니다...</span>";
-    if (resultArea) resultArea.innerHTML = ""; // 재검색 시 표 초기화
+    if (resultArea) resultArea.innerHTML = ""; 
     searchBtn.disabled = true;
     runBtn.disabled = true;
 
-    // 백그라운드로 대상 검색 스크립트 실행
     injectScript(injectedSearchExcelTargets, [startDt, endDt], (resultData) => {
         searchBtn.disabled = false;
         
@@ -1442,35 +1441,36 @@ document.getElementById('searchExcelBtn')?.addEventListener('click', () => {
             return;
         }
 
-        // 백그라운드에서 넘어온 ID 배열 저장
-        excelTargetIds = resultData.ids; 
+        // 💡 1단계에서 찾은 객체 배열 전체를 저장 (시즌 여부 포함)
+        excelTargetDetails = resultData.details; 
 
-        if (excelTargetIds.length === 0) {
+        if (excelTargetDetails.length === 0) {
             statusEl.innerHTML = "해당 기간에 배포승인된 신규 타이틀이 없습니다.";
             runBtn.disabled = true;
             runBtn.style.opacity = '0.5';
             return;
         }
 
-        statusEl.innerHTML = `<span style='color:#10b981; font-weight:bold;'>✅ 검색 완료! 총 ${excelTargetIds.length}건의 대상이 발견되었습니다.</span><br>이제 [2. 추출 및 복사] 버튼을 눌러주세요.`;
+        statusEl.innerHTML = `<span style='color:#10b981; font-weight:bold;'>✅ 검색 완료! 총 ${excelTargetDetails.length}건의 대상이 발견되었습니다.</span><br>이제 [2. 추출 및 복사] 버튼을 눌러주세요.`;
         runBtn.disabled = false;
         runBtn.style.opacity = '1';
 
-        // 💡 검색된 리스트를 UI 표로 렌더링
         if (resultArea && resultData.details) {
             let html = `<table style="width:100%; border-collapse:collapse; text-align:left; margin-top:8px;">`;
             html += `<tr style="background:var(--bg-dark); border-bottom:1px solid var(--border-color); color:var(--text-sub);">
                         <th style="padding:4px;">편성일</th>
+                        <th style="padding:4px;">유형</th>
                         <th style="padding:4px;">시리즈ID</th>
                         <th style="padding:4px;">타이틀명</th>
                      </tr>`;
             
-            // 편성일자 오름차순으로 정렬하여 렌더링
             resultData.details.sort((a,b) => a.date.localeCompare(b.date)).forEach(item => {
                 let fDate = item.date.length === 8 ? `${item.date.substring(4,6)}.${item.date.substring(6,8)}` : item.date;
+                let tBadge = item.isSeason ? `<span style="color:var(--accent-red);">시즌</span>` : `<span style="color:var(--accent-purple);">타이틀</span>`;
                 html += `<tr style="border-bottom:1px solid #333;">
                             <td style="padding:4px;">${fDate}</td>
-                            <td style="padding:4px; color:var(--accent-purple);">${item.id}</td>
+                            <td style="padding:4px; font-weight:bold;">${tBadge}</td>
+                            <td style="padding:4px; color:var(--text-sub);">${item.id}</td>
                             <td style="padding:4px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:130px;" title="${item.title}">${item.title}</td>
                          </tr>`;
             });
@@ -1482,7 +1482,7 @@ document.getElementById('searchExcelBtn')?.addEventListener('click', () => {
 
 // 💡 3단계: [2. 추출 및 복사] 버튼 클릭 이벤트
 document.getElementById('runExcelBtn')?.addEventListener('click', () => {
-    if (excelTargetIds.length === 0) return alert("먼저 대상을 검색해주세요.");
+    if (excelTargetDetails.length === 0) return alert("먼저 대상을 검색해주세요.");
 
     const statusEl = document.getElementById('excelStatus');
     const searchBtn = document.getElementById('searchExcelBtn');
@@ -1492,8 +1492,8 @@ document.getElementById('runExcelBtn')?.addEventListener('click', () => {
     searchBtn.disabled = true;
     runBtn.disabled = true;
 
-    // 백그라운드로 병렬 추출 스크립트 실행
-    injectScript(injectedParallelExcelExport, [excelTargetIds], (result) => {
+    // 💡 ID 배열이 아닌 객체 배열(상세정보 포함)을 전달
+    injectScript(injectedParallelExcelExport, [excelTargetDetails], (result) => {
         searchBtn.disabled = false;
         runBtn.disabled = false;
 
@@ -1502,9 +1502,8 @@ document.getElementById('runExcelBtn')?.addEventListener('click', () => {
             return alert("데이터 파싱 중 문제가 생겼습니다.");
         }
 
-        statusEl.innerHTML = `<span style='color:#10b981; font-weight:bold;'>🎉 성공! 총 ${excelTargetIds.length}건 파싱 완료!</span><br>데이터가 클립보드에 복사되었습니다.`;
+        statusEl.innerHTML = `<span style='color:#10b981; font-weight:bold;'>🎉 성공! 총 ${excelTargetDetails.length}건 파싱 완료!</span><br>데이터가 클립보드에 복사되었습니다.`;
 
-        // 클립보드 복사
         const tempTextArea = document.createElement('textarea');
         tempTextArea.value = result.data;
         document.body.appendChild(tempTextArea);
@@ -1520,10 +1519,8 @@ document.getElementById('runExcelBtn')?.addEventListener('click', () => {
         }
     });
 });
-
-
 // ==========================================
-// 🚀 주입용 백그라운드 스크립트 1: 대상 검색만 빠르게 수행 (일반 VOD 전용, OTT 차단)
+// 🚀 주입용 백그라운드 스크립트 1: 대상 검색 (시즌 판별 100% 확정)
 // ==========================================
 async function injectedSearchExcelTargets(startDt, endDt) {
     const csrf = document.querySelector("input[name='_csrf']")?.value;
@@ -1536,35 +1533,35 @@ async function injectedSearchExcelTargets(startDt, endDt) {
         let tList = tRes.result?.contents || tRes.contents || [];
         let sList = sRes.result?.contents || sRes.contents || [];
         
+        // 💡 핵심: 어떤 리스트에서 가져왔는지 100% 정확하게 마킹
+        tList.forEach(item => item._isSeason = false);
+        sList.forEach(item => item._isSeason = true);
+        
         let uniqueMap = new Map();
 
         [...tList, ...sList].forEach(item => {
-            // 1. 미배포 상태 걸러내기
             let tvStatus = item.tvStatus || item.tv_status || "";
             let tvMdaStatus = item.tvMdaStatus || item.tv_mda_status || "";
             let isApproved = tvStatus.includes("배포승인") || tvMdaStatus.includes("배포승인");
 
-            // 2. 편성일자 정밀 필터링
             let rawSvcFrDt = (item.svcFrDt || item.svc_fr_dt || "00000000").substring(0, 8);
             let isTargetDate = (rawSvcFrDt >= startDt && rawSvcFrDt <= endDt);
 
-            // 3. 서비스 유형 '일반 VOD' 전용 필터링
             let sTypNm = item.svcTypNm || item.svc_typ_nm || "";
             let sTypCd = String(item.svcTypCd || item.svc_typ_cd || "");
             let isGeneralVod = sTypNm.includes("일반 VOD") || sTypCd === "30";
 
-            // 💡 4. VOD 미사용(N) 데이터 완벽 차단! (추적 스크립트 결과 반영)
             let vodSvcYn = item.vodSvcYn || item.vod_svc_yn || "Y"; 
             let isOttExclusive = (vodSvcYn === "N");
 
-            // 모든 조건을 만족하고, 미사용(N)이 아닌 진짜 데이터만 취합
             if (isApproved && isTargetDate && isGeneralVod && !isOttExclusive) {
                 let id = item.srisId || item.sris_id;
                 if (id && !uniqueMap.has(id)) {
                     uniqueMap.set(id, {
                         id: id,
                         title: item.srisNm || item.sris_nm || "",
-                        date: rawSvcFrDt
+                        date: rawSvcFrDt,
+                        isSeason: item._isSeason // 💡 추출 엔진으로 전달할 마커
                     });
                 }
             }
@@ -1580,11 +1577,10 @@ async function injectedSearchExcelTargets(startDt, endDt) {
         return { error: true };
     }
 }
-
 // ==========================================
-// 🚀 주입용 백그라운드 스크립트 2: 병렬 추출 엔진 (시즌 판별 오류 해결 완료)
+// 🚀 주입용 백그라운드 스크립트 2: 병렬 추출 엔진 (오류 없는 확정 판별)
 // ==========================================
-async function injectedParallelExcelExport(targetSrisIds) {
+async function injectedParallelExcelExport(targetDetails) {
     const csrf = document.querySelector("input[name='_csrf']")?.value;
     if (!csrf) return { error: true };
 
@@ -1610,24 +1606,26 @@ async function injectedParallelExcelExport(targetSrisIds) {
     const CHUNK_SIZE = 5;
     let extractedRows = []; 
 
-    for (let i = 0; i < targetSrisIds.length; i += CHUNK_SIZE) {
-        const chunkIds = targetSrisIds.slice(i, i + CHUNK_SIZE);
+    // 💡 넘어온 데이터가 이제 단순 문자열(ID)이 아니라 {id, isSeason, ...} 객체임
+    for (let i = 0; i < targetDetails.length; i += CHUNK_SIZE) {
+        const chunk = targetDetails.slice(i, i + CHUNK_SIZE);
         
-        const chunkResults = await Promise.all(chunkIds.map(async (srisId) => {
+        const chunkResults = await Promise.all(chunk.map(async (targetObj) => {
+            let srisId = targetObj.id;
+            let isSeason = targetObj.isSeason; // 100% 정확한 플래그
             let rowData = [];
-            try {
-                // 💡 검증된 방식으로 시즌 여부 및 상세 데이터 정확히 판별
-                let isSeason = false;
-                let detail = await $.post('/contents/season/seasonSelect.json', { srisId, _csrf: csrf }).catch(()=>null);
 
-                if (detail && (detail.result?.seasonInfo || detail.seasonInfo || detail.result?.srisNm || detail.srisNm)) {
-                    isSeason = true;
-                } else {
-                    detail = await $.post('/contents/title/titleSelect.json', { srisId, _csrf: csrf }).catch(()=>null);
-                    isSeason = false;
+            try {
+                // 💡 플래그에 따라 정확한 API 단 한 번만 호출
+                let detApi = isSeason ? '/contents/season/seasonSelect.json' : '/contents/title/titleSelect.json';
+                let detail = await $.post(detApi, { srisId, _csrf: csrf }).catch(()=>null);
+                
+                // 혹시 모를 통신 에러 시 폴백 방어막
+                if (!detail) {
+                    let fallbackApi = isSeason ? '/contents/title/titleSelect.json' : '/contents/season/seasonSelect.json';
+                    detail = await $.post(fallbackApi, { srisId, _csrf: csrf }).catch(()=>null);
                 }
 
-                // 2차 방어망: 상세 데이터 내 vodSvcYn === N 이면 버림
                 let vodSvcYn = findValueDeep(detail, ["vodSvcYn", "vod_svc_yn"]) || "Y";
                 if (vodSvcYn === "N") return [];
 
