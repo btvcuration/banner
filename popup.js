@@ -502,7 +502,6 @@ document.getElementById('clearBtn').addEventListener('click', () => {
 // 가격 변동 탭 이벤트 리스너 및 렌더링 로직 추가
 // ----------------------------------------------------------
 
-// 1. 전체 선택/해제 기능 추가
 const pdSelectAll = document.getElementById('pd-selectAllCats');
 if (pdSelectAll) {
     pdSelectAll.addEventListener('change', (e) => {
@@ -511,7 +510,6 @@ if (pdSelectAll) {
     });
 }
 
-// 2. 필터 변경 시 리스트 다시 그리기
 document.querySelectorAll('.pd-cat-filter').forEach(el => {
     el.addEventListener('change', () => {
         let allChecked = Array.from(document.querySelectorAll('.pd-cat-filter')).every(cb => cb.checked);
@@ -523,7 +521,6 @@ document.querySelectorAll('#pd-date-filter, #pd-aud-filter, #pd-price-filter').f
     el.addEventListener('change', renderPriceDrops);
 });
 
-// 3. 전체 스캔 버튼 클릭
 document.getElementById('pd-scan-btn').addEventListener('click', () => {
     document.getElementById('pd-status').innerHTML = "⏳ 서버에서 데이터를 병렬 수집 중입니다... (약 5~10초 소요)";
     document.getElementById('pd-scan-btn').disabled = true;
@@ -539,11 +536,10 @@ document.getElementById('pd-scan-btn').addEventListener('click', () => {
         }
         
         globalPriceDropData = results;
-        renderPriceDrops(); // 내부에서 pd-status 동적 업데이트 처리
+        renderPriceDrops(); 
     });
 });
 
-// 4. 복사 버튼 클릭
 document.getElementById('pd-copy-btn').addEventListener('click', () => {
     const renderedItems = Array.from(document.querySelectorAll('.pd-rendered-item'));
     if (renderedItems.length === 0) return alert("복사할 데이터가 없습니다.");
@@ -570,14 +566,12 @@ document.getElementById('pd-copy-btn').addEventListener('click', () => {
     }
 });
 
-// 5. 동적 리스트 렌더링 함수
 function renderPriceDrops() {
     const resultArea = document.getElementById('pd-result-area');
     resultArea.innerHTML = "";
 
     if (globalPriceDropData.length === 0) return;
 
-    // 필터값 추출
     const activeCats = Array.from(document.querySelectorAll('.pd-cat-filter:checked')).map(cb => cb.value);
     const maxDays = parseInt(document.getElementById('pd-date-filter').value, 10);
     const minAudience = parseInt(document.getElementById('pd-aud-filter').value, 10) || 0;
@@ -589,7 +583,6 @@ function renderPriceDrops() {
         if (item.daysDiff > maxDays || item.daysDiff < 0) return false; 
         if (item.rawAudience < minAudience) return false; 
         
-        // 가격 필터 처리 (빈칸이 아닐 경우에만 일치 여부 확인)
         if (targetPriceText !== "" && !isNaN(targetPrice)) {
             if (item.rawTargetRentPrice !== targetPrice) return false; 
         }
@@ -597,7 +590,6 @@ function renderPriceDrops() {
         return true;
     });
 
-    // 💡 안내 텍스트 동적 업데이트 (필터 적용 결과 표기)
     document.getElementById('pd-status').innerHTML = `<span style="color:#10b981; font-weight:bold;">✅ 필터 적용됨:</span> 총 ${globalPriceDropData.length}건 확보 중 <b>${filtered.length}건</b> 표시`;
 
     if (filtered.length === 0) {
@@ -918,9 +910,13 @@ async function injectedFetchDetail(srisId, isSeason, passedTvStatus, passedTvMda
         var epRes = await $.post('/contents/episode/episodeList.json', { srisId: srisId, _csrf: csrf, rows: 200, page: 1 });
         var epList = epRes.result?.contents || epRes.contents || [];
         
-        var mainEps = epList.filter(e => e.pcimTypCd === "10" || e.epsdTypNm === "본편");
+        var mainEps = epList.filter(e => e.pcimTypCd === "10" || String(e.epsdTypNm).includes("본편") || String(e.epsdTypNm).includes("영화"));
+        if(mainEps.length === 0) mainEps = epList;
+
         mainEps = mainEps.sort((a, b) => parseInt(a.brcastTmsVal || 999) - parseInt(b.brcastTmsVal || 999));
-        var sliceCount = isSeason ? 3 : 1;
+        
+        // 🚀 단편(영화)도 UHD 처리를 위해 최대 3개까지 에피소드 ID 확보
+        var sliceCount = 3; 
         info.epsdIds = mainEps.slice(0, sliceCount).map(e => e.epsdId);
         
         let primaryEpsdId = info.epsdIds[0] || "-";
@@ -1006,12 +1002,26 @@ async function injectedFetchDetail(srisId, isSeason, passedTvStatus, passedTvMda
             }
         }
 
+        let todayStr = new Date().getFullYear() + String(new Date().getMonth()+1).padStart(2,'0') + String(new Date().getDate()).padStart(2,'0');
+
         for (let epId of info.epsdIds) {
             let epData = { prices: [], subscription: "정보 없음", hasUhd: false };
             
             try {
                 let ppmRes = await $.post('/common/product/layer/ppmPrdList.json', { epsdId: epId, _csrf: csrf, rows: 100, page: 1 });
                 let ppmList = ppmRes.result?.contents || ppmRes.contents || [];
+                
+                // 🚀 월정액 더미/PoC 차단 필터 적용
+                ppmList = ppmList.filter(p => {
+                    let pocVal = p.pocTypCd || p.poc_typ_cd;
+                    if (pocVal && String(pocVal) !== "10") return false;
+                    let useStatus = p.useYn || p.prdUseYn || p.epsdPrdUseYn || "Y";
+                    if (String(useStatus).toUpperCase() === "N") return false;
+                    let endDate = p.prdPrcToDt || p.prcToDt || p.epsdPrdToDt || p.prdToDt || p.sellToDt || "";
+                    if (endDate.length >= 8 && endDate.substring(0, 8) < todayStr) return false;
+                    return true;
+                });
+
                 if (ppmList.length > 0) epData.subscription = ppmList.map(p => p.prdNm || p.prd_nm).join(', ');
             } catch(e) {}
 
@@ -1020,8 +1030,15 @@ async function injectedFetchDetail(srisId, isSeason, passedTvStatus, passedTvMda
                 let prdList = prdRes.result?.contents || prdRes.contents || [];
                 
                 for (let p of prdList) {
+                    // 🚀 PPV 더미/PoC 차단 필터 적용
                     let pStr = JSON.stringify(p).toUpperCase();
                     if (pStr.includes("HEB")) continue;
+                    let pocVal = p.pocTypCd || p.poc_typ_cd;
+                    if (pocVal && String(pocVal) !== "10") continue;
+                    let useStatus = p.useYn || p.prdUseYn || p.epsdPrdUseYn || "Y";
+                    if (String(useStatus).toUpperCase() === "N") continue;
+                    let endDate = p.prdPrcToDt || p.prcToDt || p.epsdPrdToDt || p.prdToDt || p.sellToDt || "";
+                    if (endDate.length >= 8 && endDate.substring(0, 8) < todayStr) continue;
 
                     let rslu = p.rsluTypCdNm || p.rsluTypNm || "";
                     let type = p.possnYn === "Y" ? "소장" : "대여";
@@ -1189,17 +1206,12 @@ async function injectedRunBatchPoster(titleList, seasonList) {
     return results;
 }
 
-// [추가/수정] ----------------------------------------------------
-// 가격 변동 탭: 딥 서치를 걷어내고 정확한 경로(핀셋)로 최적화한 초고속 스캔 엔진
-// ----------------------------------------------------------
 async function injectedFetchPriceDrops() {
     const csrf = document.querySelector("input[name='_csrf']")?.value;
     if (!csrf) return { error: true };
 
     const apiUrl = '/product/schedule/prdPrcShortList.json'; 
     const metaDetailApiUrl = '/meta/contentsMetaRelation.json';
-
-    // ❌ CPU 과부하를 일으키던 무거운 딥 서치(findValueDeep) 함수 완전 삭제
 
     const today = new Date();
     today.setHours(0,0,0,0); 
@@ -1243,7 +1255,6 @@ async function injectedFetchPriceDrops() {
     let rawDrops = [];
     const uniqueLogs = new Set(); 
 
-    // 1. 가격 변동 건 기본 정보 수집
     for (const metaCode of targetMetaCodes) {
         for (const poc of targetPocs) {
             let page = 1;
@@ -1322,11 +1333,9 @@ async function injectedFetchPriceDrops() {
         }
     }
 
-    // 2. 중복 없는 시리즈ID 추출
     let uniqueSrisIds = [...new Set(rawDrops.map(d => d.srisId))];
     let metaDataMap = {};
 
-    // 3. 핀셋 추출: 딥 서치와 시즌 API 폴백을 완전히 제거하고 직행
     const CHUNK_SIZE = 15; 
     for (let i = 0; i < uniqueSrisIds.length; i += CHUNK_SIZE) {
         const chunk = uniqueSrisIds.slice(i, i + CHUNK_SIZE);
@@ -1334,16 +1343,11 @@ async function injectedFetchPriceDrops() {
             let extractedMetaId = "";
             let audienceCount = 0;
             try {
-                // ✅ [해결 1] 영화(단편) API만 찌르기 (불필요한 시즌 폴백 제거로 속도 2배 향상)
                 let d = await $.post('/contents/title/titleSelect.json', { srisId: sId, _csrf: csrf });
-                
-                // ✅ [해결 2] 정확한 고정 경로로 MetaID 초고속 추출
                 extractedMetaId = d?.result?.titleInfo?.metaId || d?.titleInfo?.metaId || d?.result?.metaId || d?.metaId || "";
                 
                 if (extractedMetaId) {
                     let m = await $.post(metaDetailApiUrl, { metaId: extractedMetaId, _csrf: csrf });
-                    
-                    // ✅ [해결 3] 콘솔 검증 완료된 정확한 경로에서 관객수 다이렉트 추출
                     let foundAud = m?.result?.metaInfo?.dmstSpctCnt || m?.metaInfo?.dmstSpctCnt;
                     audienceCount = parseInt(foundAud) || 0; 
                 }
@@ -1353,7 +1357,6 @@ async function injectedFetchPriceDrops() {
         }));
     }
 
-    // 4. 수집된 메타데이터를 원본 리스트에 머지
     let extractedData = rawDrops.map(item => {
         let meta = metaDataMap[item.srisId] || { audienceCount: 0 };
         return {
@@ -1365,4 +1368,201 @@ async function injectedFetchPriceDrops() {
     
     extractedData.sort((a, b) => a.daysDiff - b.daysDiff);
     return extractedData;
+}
+
+
+// ==========================================
+// 🚀 신규 기능: 기간 설정 기반 엑셀 추출 로직
+// ==========================================
+document.getElementById('runExcelBtn')?.addEventListener('click', () => {
+    let startVal = document.getElementById('exStartDt').value;
+    let endVal = document.getElementById('exEndDt').value;
+
+    if (!startVal || !endVal) return alert("시작일과 종료일을 모두 설정해주세요.");
+
+    let startDt = startVal.replace(/-/g, '');
+    let endDt = endVal.replace(/-/g, '');
+    if (startDt > endDt) return alert("시작일이 종료일보다 늦을 수 없습니다.");
+
+    const statusEl = document.getElementById('excelStatus');
+    const btn = document.getElementById('runExcelBtn');
+    
+    statusEl.innerText = "📡 대상 리스트를 검색하고 상세 데이터를 파싱 중입니다... (1~2분 소요)";
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+
+    injectScript(injectedDateRangeExport, [startDt, endDt], (result) => {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+
+        if (!result || result.error) {
+            statusEl.innerText = "";
+            return alert(`오류 발생: ${result?.msg || '알 수 없는 오류'}`);
+        }
+        if (result.count === 0) {
+            statusEl.innerText = "해당 기간에 편성된 타이틀이 없습니다.";
+            return;
+        }
+
+        statusEl.innerText = `✅ 총 ${result.count}건 파싱 완료!`;
+        const tempTextArea = document.createElement('textarea');
+        tempTextArea.value = result.data;
+        document.body.appendChild(tempTextArea);
+        tempTextArea.select();
+        
+        try {
+            document.execCommand('copy');
+            alert(`🎉 총 ${result.count}건 복사 완료!\n구글 시트에 [Ctrl + V]로 붙여넣으세요.`);
+        } catch (err) {
+            alert(`복사 실패: ${err}`);
+        } finally {
+            document.body.removeChild(tempTextArea);
+        }
+    });
+});
+
+async function injectedDateRangeExport(startDt, endDt) {
+    const csrf = document.querySelector("input[name='_csrf']")?.value;
+    if (!csrf) return { error: true, msg: "CSRF 토큰 누락" };
+
+    try {
+        let tRes = await $.post('/contents/title/titleList.json', { schSvcFrDt: startDt, schSvcToDt: endDt, rows: 1000, page: 1, _csrf: csrf }).catch(()=>({}));
+        let sRes = await $.post('/contents/season/seasonList.json', { schSvcFrDt: startDt, schSvcToDt: endDt, rows: 1000, page: 1, _csrf: csrf }).catch(()=>({}));
+        
+        let tList = tRes.result?.contents || tRes.contents || [];
+        let sList = sRes.result?.contents || sRes.contents || [];
+        
+        let targetSrisIds = [...new Set([...tList, ...sList].map(item => item.srisId || item.sris_id).filter(id => id))];
+        
+        if (targetSrisIds.length === 0) return { data: "", count: 0 };
+
+        let tsvOutput = "카테고리구분_메타\t서브카테고리구분(메타)\t시리즈ID\t콘텐츠메타유형\t계약처명(시리즈)\t시리즈유형\t영상유형\t서비스시작일시\tPPV판매가격\t콘텐츠상품명\tN스크린여부\t월정액상품명\n";
+        
+        const today = new Date();
+        const todayStr = today.getFullYear() + String(today.getMonth() + 1).padStart(2, '0') + String(today.getDate()).padStart(2, '0');
+
+        const findValueDeep = (obj, targetKeys) => {
+            let result = null;
+            const keys = Array.isArray(targetKeys) ? targetKeys : [targetKeys];
+            const search = (curr) => {
+                if (result !== null || curr === null || typeof curr !== 'object') return;
+                for (let k in curr) {
+                    if (keys.includes(k) && curr[k] !== undefined && curr[k] !== null && curr[k] !== "") { 
+                        result = curr[k]; return; 
+                    }
+                    if (typeof curr[k] === 'object') search(curr[k]);
+                }
+            };
+            search(obj);
+            return result;
+        };
+
+        for (const srisId of targetSrisIds) {
+            try {
+                let detail = await $.post('/contents/season/seasonSelect.json', { srisId, _csrf: csrf }).catch(()=>null);
+                let isSeason = !!(detail?.result?.seasonInfo?.metaTypNm || detail?.seasonInfo?.metaTypNm);
+                if (!isSeason) detail = await $.post('/contents/title/titleSelect.json', { srisId, _csrf: csrf }).catch(()=>null);
+                
+                const seriesType = isSeason ? "시즌" : "본편";
+                let srisNm = findValueDeep(detail, ["srisNm", "sris_nm"]) || "-";
+                let metaId = findValueDeep(detail, ["metaId", "meta_id"]) || "";
+                let rawSvcFrDt = String(findValueDeep(detail, ["svcFrDt", "svc_fr_dt"]) || "");
+                let svcFrDt = rawSvcFrDt.length >= 8 ? `${rawSvcFrDt.substring(0,4)}-${rawSvcFrDt.substring(4,6)}-${rawSvcFrDt.substring(6,8)}` : rawSvcFrDt;
+
+                let targetEpsdIds = [];
+                let epRes = await $.post('/contents/episode/episodeList.json', { srisId, _csrf: csrf, rows: 200, page: 1 }).catch(()=>({}));
+                let epList = epRes?.result?.contents || epRes?.contents || [];
+                let metaTypNm = "-", svcTypNm = "-";
+
+                if (epList.length > 0) {
+                    metaTypNm = epList[0].metaTypNm || epList[0].meta_typ_nm || "-";
+                    svcTypNm = epList[0].svcTypNm || epList[0].svc_typ_nm || "-";
+                    let mainEps = epList.filter(e => e.pcimTypCd === "10" || String(e.epsdTypNm).includes("본편") || String(e.epsdTypNm).includes("영화"));
+                    if (mainEps.length === 0) mainEps = epList;
+                    mainEps.sort((a, b) => parseInt(a.brcastTmsVal || 999) - parseInt(b.brcastTmsVal || 999));
+                    targetEpsdIds = mainEps.slice(0, 3).map(e => e.epsdId);
+                }
+
+                if (targetEpsdIds.length === 0) {
+                    let fallbackEp = findValueDeep(detail, ["epsdId", "epsd_id", "mainEpsdId"]);
+                    if (fallbackEp) targetEpsdIds.push(fallbackEp);
+                }
+
+                let cpNm = "-";
+                let cpRes = await $.post('/common/contents/layer/pocContractList.json', { srisId: srisId, pocTypCd: "10", _csrf: csrf }).catch(()=>null);
+                let cpList = cpRes?.result?.contents || cpRes?.contents || [];
+                if (cpList.length === 0 && targetEpsdIds.length > 0) {
+                    cpRes = await $.post('/common/contents/layer/pocContractList.json', { epsdId: targetEpsdIds[0], pocTypCd: "10", _csrf: csrf }).catch(()=>null);
+                    cpList = cpRes?.result?.contents || cpRes?.contents || [];
+                }
+                if (cpList.length > 0) cpNm = [...new Set(cpList.map(c => c.contrpNm))].join(", ");
+                else cpNm = findValueDeep(detail, ["cpNm", "cp_nm", "ptnrNm", "cnptNm"]) || "-";
+
+                let nscrnYn = "-";
+                if (targetEpsdIds.length > 0) {
+                    let epDetail = await $.post('/contents/episode/episodeSelect.json', { epsdId: targetEpsdIds[0], _csrf: csrf }).catch(()=>null);
+                    nscrnYn = findValueDeep(epDetail, ["nscrnYn", "nscrn_yn"]) || "-";
+                    if (metaId === "") metaId = findValueDeep(epDetail, ["metaId", "meta_id"]) || "";
+                    if (metaTypNm === "-") metaTypNm = findValueDeep(epDetail, ["metaTypNm", "meta_typ_nm"]) || "-";
+                    if (svcTypNm === "-") svcTypNm = findValueDeep(epDetail, ["svcTypNm", "svc_typ_nm"]) || "-";
+                }
+                if(metaTypNm === "-") metaTypNm = findValueDeep(detail, ["metaTypNm", "meta_typ_nm"]) || "-";
+                if(svcTypNm === "-") svcTypNm = findValueDeep(detail, ["svcTypNm", "svc_typ_nm"]) || "-";
+                if(nscrnYn === "-") nscrnYn = findValueDeep(detail, ["nscrnYn", "nscrn_yn"]) || "-";
+
+                let parCdNm = "-", catCdNm = "-";
+                if (metaId) {
+                    let relRes = await $.post('/meta/contentsMetaRelation.json', { metaId, _csrf: csrf }).catch(()=>null);
+                    let catArr = relRes?.result?.metaCatCdInfo || relRes?.metaCatCdInfo || [];
+                    if (catArr.length > 0) {
+                        parCdNm = catArr[0].parCdNm || "-";
+                        catCdNm = catArr[0].catCdNm || "-";
+                    }
+                }
+
+                let priceSet = new Set(), ppmSet = new Set(); 
+                for (let epsdId of targetEpsdIds) {
+                    let ppvRes = await $.post('/common/product/layer/ppvPrdList.json', { epsdId, _csrf: csrf, rows: 50, page: 1 }).catch(()=>null);
+                    let ppvList = (ppvRes?.result?.contents || ppvRes?.contents || []).filter(p => {
+                        if (JSON.stringify(p).toUpperCase().includes("HEB")) return false;
+                        let pocVal = p.pocTypCd || p.poc_typ_cd;
+                        if (pocVal && String(pocVal) !== "10") return false;
+                        let useStatus = p.useYn || p.prdUseYn || p.epsdPrdUseYn || "Y";
+                        if (String(useStatus).toUpperCase() === "N") return false;
+                        let endDate = p.prdPrcToDt || p.prcToDt || p.epsdPrdToDt || p.prdToDt || p.sellToDt || "";
+                        if (endDate.length >= 8 && endDate.substring(0, 8) < todayStr) return false;
+                        return true;
+                    });
+                    
+                    if (ppvList.length > 0) ppvList.forEach(p => priceSet.add(p.prdPrice || p.prdPrc || "0"));
+                    else priceSet.add("0"); 
+
+                    let ppmRes = await $.post('/common/product/layer/ppmPrdList.json', { epsdId, _csrf: csrf, rows: 100, page: 1 }).catch(()=>null);
+                    let ppmList = (ppmRes?.result?.contents || ppmRes?.contents || []).filter(p => {
+                        let pocVal = p.pocTypCd || p.poc_typ_cd;
+                        if (pocVal && String(pocVal) !== "10") return false;
+                        let useStatus = p.useYn || p.prdUseYn || p.epsdPrdUseYn || "Y";
+                        if (String(useStatus).toUpperCase() === "N") return false;
+                        let endDate = p.prdPrcToDt || p.prcToDt || p.epsdPrdToDt || p.prdToDt || p.sellToDt || "";
+                        if (endDate.length >= 8 && endDate.substring(0, 8) < todayStr) return false;
+                        return true;
+                    });
+                    if (ppmList.length > 0) ppmList.forEach(p => ppmSet.add(p.prdNm || p.prd_nm));
+                }
+
+                if (priceSet.size === 0) priceSet.add("-");
+                let ppmString = ppmSet.size > 0 ? Array.from(ppmSet).join(", ") : "-";
+
+                priceSet.forEach(price => {
+                    tsvOutput += [
+                        parCdNm, catCdNm, srisId, metaTypNm, cpNm, seriesType, svcTypNm,
+                        svcFrDt, price, srisNm, nscrnYn, ppmString
+                    ].join("\t") + "\n";
+                });
+            } catch (err) {}
+        }
+        return { data: tsvOutput, count: targetSrisIds.length };
+    } catch (e) {
+        return { error: true, msg: e.message };
+    }
 }
