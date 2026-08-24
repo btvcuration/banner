@@ -1573,7 +1573,7 @@ async function injectedSearchExcelTargets(startDt, endDt) {
 }
 
 // ==========================================
-// 🚀 주입용 백그라운드 스크립트 2: 병렬 추출 엔진 (빈칸 통일 및 최신순 정렬)
+// 🚀 주입용 백그라운드 스크립트 2: 병렬 추출 엔진 (시즌 판별 오류 해결 완료)
 // ==========================================
 async function injectedParallelExcelExport(targetSrisIds) {
     const csrf = document.querySelector("input[name='_csrf']")?.value;
@@ -1607,16 +1607,23 @@ async function injectedParallelExcelExport(targetSrisIds) {
         const chunkResults = await Promise.all(chunkIds.map(async (srisId) => {
             let rowData = [];
             try {
+                // 💡 검증된 방식으로 시즌 여부 및 상세 데이터 정확히 판별
+                let isSeason = false;
                 let detail = await $.post('/contents/season/seasonSelect.json', { srisId, _csrf: csrf }).catch(()=>null);
-                let isSeason = !!(detail?.result?.seasonInfo?.metaTypNm || detail?.seasonInfo?.metaTypNm);
-                if (!isSeason) detail = await $.post('/contents/title/titleSelect.json', { srisId, _csrf: csrf }).catch(()=>null);
-                
-                // 💡 2차 방어망: 상세 데이터 내에서도 vodSvcYn === N 이면 버림
+
+                if (detail && (detail.result?.seasonInfo || detail.seasonInfo || detail.result?.srisNm || detail.srisNm)) {
+                    isSeason = true;
+                } else {
+                    detail = await $.post('/contents/title/titleSelect.json', { srisId, _csrf: csrf }).catch(()=>null);
+                    isSeason = false;
+                }
+
+                // 2차 방어망: 상세 데이터 내 vodSvcYn === N 이면 버림
                 let vodSvcYn = findValueDeep(detail, ["vodSvcYn", "vod_svc_yn"]) || "Y";
                 if (vodSvcYn === "N") return [];
 
                 const seriesType = isSeason ? "시즌" : "타이틀";
-                let srisNm = findValueDeep(detail, ["srisNm", "sris_nm"]) || ""; // 하이픈 대신 빈칸
+                let srisNm = findValueDeep(detail, ["srisNm", "sris_nm"]) || ""; 
                 let metaId = findValueDeep(detail, ["metaId", "meta_id"]) || "";
                 let rawSvcFrDt = String(findValueDeep(detail, ["svcFrDt", "svc_fr_dt"]) || "");
                 let svcFrDt = rawSvcFrDt.length >= 8 ? `${rawSvcFrDt.substring(0,4)}-${rawSvcFrDt.substring(4,6)}-${rawSvcFrDt.substring(6,8)}` : rawSvcFrDt;
@@ -1626,7 +1633,6 @@ async function injectedParallelExcelExport(targetSrisIds) {
                 let epRes = await $.post('/contents/episode/episodeList.json', { srisId, _csrf: csrf, rows: 200, page: 1 }).catch(()=>({}));
                 let epList = epRes?.result?.contents || epRes?.contents || [];
                 
-                // 💡 모든 속성 초기값을 하이픈 대신 빈칸("")으로 변경
                 let metaTypNm = "", svcTypNm = "";
                 let epsdTypNm = "본편"; 
 
@@ -1655,7 +1661,6 @@ async function injectedParallelExcelExport(targetSrisIds) {
                 if (cpList.length > 0) cpNm = [...new Set(cpList.map(c => c.contrpNm))].join(", ");
                 else cpNm = findValueDeep(detail, ["cpNm", "cp_nm", "ptnrNm", "cnptNm"]) || "";
 
-                // 💡 최후 방어망: CP명에 OTT AGG가 포함되어 있다면 (혹시 모를 예외 방어) 버림
                 if (cpNm.toUpperCase().includes("OTT")) {
                     return [];
                 }
@@ -1699,7 +1704,7 @@ async function injectedParallelExcelExport(targetSrisIds) {
                     });
                     
                     if (ppvList.length > 0) ppvList.forEach(p => priceSet.add(p.prdPrice || p.prdPrc || "0"));
-                    else priceSet.add(""); // 가격 없음도 빈칸 처리
+                    else priceSet.add(""); 
 
                     let ppmRes = await $.post('/common/product/layer/ppmPrdList.json', { epsdId, _csrf: csrf, rows: 100, page: 1 }).catch(()=>null);
                     let ppmList = (ppmRes?.result?.contents || ppmRes?.contents || []).filter(p => {
@@ -1715,7 +1720,7 @@ async function injectedParallelExcelExport(targetSrisIds) {
                 }
 
                 if (priceSet.size === 0) priceSet.add("");
-                let ppmString = ppmSet.size > 0 ? Array.from(ppmSet).join(", ") : ""; // 월정액 없음도 빈칸 처리
+                let ppmString = ppmSet.size > 0 ? Array.from(ppmSet).join(", ") : ""; 
 
                 priceSet.forEach(price => {
                     rowData.push({
@@ -1736,7 +1741,6 @@ async function injectedParallelExcelExport(targetSrisIds) {
         });
     }
 
-    // 최신 날짜 순(내림차순) 정렬
     extractedRows.sort((a, b) => b.date.localeCompare(a.date));
 
     if(extractedRows.length > 0) {
