@@ -1398,39 +1398,79 @@ async function injectedFetchPriceDrops() {
 
 
 // ==========================================
-// 🚀 신규 기능: 기간 설정 기반 엑셀 추출 로직
+// 🚀 신규 기능: 기간 검색 -> 병렬 추출 -> 복사 (3단계 분리 아키텍처)
 // ==========================================
-document.getElementById('runExcelBtn')?.addEventListener('click', () => {
+
+// 💡 1단계: 검색된 ID들을 임시 저장할 글로벌 변수
+let excelTargetIds = [];
+
+// 💡 2단계: [1. 대상 검색] 버튼 클릭 이벤트
+document.getElementById('searchExcelBtn')?.addEventListener('click', () => {
     let startVal = document.getElementById('exStartDt').value;
     let endVal = document.getElementById('exEndDt').value;
 
     if (!startVal || !endVal) return alert("시작일과 종료일을 모두 설정해주세요.");
-
     let startDt = startVal.replace(/-/g, '');
     let endDt = endVal.replace(/-/g, '');
     if (startDt > endDt) return alert("시작일이 종료일보다 늦을 수 없습니다.");
 
     const statusEl = document.getElementById('excelStatus');
-    const btn = document.getElementById('runExcelBtn');
+    const searchBtn = document.getElementById('searchExcelBtn');
+    const runBtn = document.getElementById('runExcelBtn');
     
-    statusEl.innerText = "📡 대상 리스트를 검색하고 상세 데이터를 파싱 중입니다... (1~2분 소요)";
-    btn.disabled = true;
-    btn.style.opacity = '0.5';
+    statusEl.innerHTML = "<span style='color:#f59e0b;'>📡 해당 기간의 배포승인 타이틀을 찾고 있습니다...</span>";
+    searchBtn.disabled = true;
+    runBtn.disabled = true;
 
-    injectScript(injectedDateRangeExport, [startDt, endDt], (result) => {
-        btn.disabled = false;
-        btn.style.opacity = '1';
-
-        if (!result || result.error) {
-            statusEl.innerText = "";
-            return alert(`오류 발생: ${result?.msg || '알 수 없는 오류'}`);
-        }
-        if (result.count === 0) {
-            statusEl.innerText = "해당 기간에 편성된 타이틀이 없습니다.";
+    // 백그라운드로 대상 검색 스크립트만 던짐
+    injectScript(injectedSearchExcelTargets, [startDt, endDt], (resultIds) => {
+        searchBtn.disabled = false;
+        
+        if (!resultIds || resultIds.error) {
+            statusEl.innerHTML = `<span style='color:var(--accent-red);'>❌ 검색 중 오류 발생</span>`;
             return;
         }
 
-        statusEl.innerText = `✅ 총 ${result.count}건 파싱 완료!`;
+        excelTargetIds = resultIds;
+
+        if (excelTargetIds.length === 0) {
+            statusEl.innerHTML = "해당 기간에 배포승인된 신규 타이틀이 없습니다.";
+            runBtn.disabled = true;
+            runBtn.style.opacity = '0.5';
+            return;
+        }
+
+        statusEl.innerHTML = `<span style='color:#10b981; font-weight:bold;'>✅ 검색 완료! 총 ${excelTargetIds.length}건의 대상이 발견되었습니다.</span><br>이제 [2. 추출 및 복사] 버튼을 눌러주세요.`;
+        runBtn.disabled = false;
+        runBtn.style.opacity = '1';
+    });
+});
+
+// 💡 3단계: [2. 추출 및 복사] 버튼 클릭 이벤트
+document.getElementById('runExcelBtn')?.addEventListener('click', () => {
+    if (excelTargetIds.length === 0) return alert("먼저 대상을 검색해주세요.");
+
+    const statusEl = document.getElementById('excelStatus');
+    const searchBtn = document.getElementById('searchExcelBtn');
+    const runBtn = document.getElementById('runExcelBtn');
+
+    statusEl.innerHTML = "<span style='color:#f59e0b;'>🚀 상세 데이터를 고속으로 조립 중입니다... (데이터 양에 따라 수십 초 소요)</span>";
+    searchBtn.disabled = true;
+    runBtn.disabled = true;
+
+    // 백그라운드로 병렬 추출 스크립트 실행
+    injectScript(injectedParallelExcelExport, [excelTargetIds], (result) => {
+        searchBtn.disabled = false;
+        runBtn.disabled = false;
+
+        if (!result || result.error) {
+            statusEl.innerHTML = `<span style='color:var(--accent-red);'>❌ 데이터 추출 중 오류 발생</span>`;
+            return alert("데이터 파싱 중 문제가 생겼습니다.");
+        }
+
+        statusEl.innerHTML = `<span style='color:#10b981; font-weight:bold;'>🎉 성공! 총 ${excelTargetIds.length}건 파싱 완료!</span><br>데이터가 클립보드에 복사되었습니다.`;
+
+        // 클립보드 복사
         const tempTextArea = document.createElement('textarea');
         tempTextArea.value = result.data;
         document.body.appendChild(tempTextArea);
@@ -1438,7 +1478,7 @@ document.getElementById('runExcelBtn')?.addEventListener('click', () => {
         
         try {
             document.execCommand('copy');
-            alert(`🎉 총 ${result.count}건 복사 완료!\n구글 시트에 [Ctrl + V]로 붙여넣으세요.`);
+            alert(`🎉 데이터 복사가 완료되었습니다!\n구글 시트에 [Ctrl + V]로 붙여넣으세요.`);
         } catch (err) {
             alert(`복사 실패: ${err}`);
         } finally {
@@ -1447,9 +1487,13 @@ document.getElementById('runExcelBtn')?.addEventListener('click', () => {
     });
 });
 
-async function injectedDateRangeExport(startDt, endDt) {
+
+// ==========================================
+// 🚀 주입용 백그라운드 스크립트 1: 대상 검색만 빠르게 수행
+// ==========================================
+async function injectedSearchExcelTargets(startDt, endDt) {
     const csrf = document.querySelector("input[name='_csrf']")?.value;
-    if (!csrf) return { error: true, msg: "CSRF 토큰 누락" };
+    if (!csrf) return { error: true };
 
     try {
         let tRes = await $.post('/contents/title/titleList.json', { schSvcFrDt: startDt, schSvcToDt: endDt, rows: 1000, page: 1, _csrf: csrf }).catch(()=>({}));
@@ -1457,39 +1501,57 @@ async function injectedDateRangeExport(startDt, endDt) {
         
         let tList = tRes.result?.contents || tRes.contents || [];
         let sList = sRes.result?.contents || sRes.contents || [];
-
+        
+        // 💡 미배포 상태 걸러내기 (RTSP or HLS 배포승인만)
         let approvedList = [...tList, ...sList].filter(item => {
             let tvStatus = item.tvStatus || item.tv_status || "";
             let tvMdaStatus = item.tvMdaStatus || item.tv_mda_status || "";
             return tvStatus.includes("배포승인") || tvMdaStatus.includes("배포승인");
         });
-        
-        let targetSrisIds = [...new Set([...tList, ...sList].map(item => item.srisId || item.sris_id).filter(id => id))];
-        
-        if (targetSrisIds.length === 0) return { data: "", count: 0 };
 
-        let tsvOutput = "카테고리구분_메타\t서브카테고리구분(메타)\t시리즈ID\t콘텐츠메타유형\t계약처명(시리즈)\t시리즈유형\t영상유형\t서비스시작일시\tPPV판매가격\t콘텐츠상품명\tN스크린여부\t월정액상품명\n";
-        
-        const today = new Date();
-        const todayStr = today.getFullYear() + String(today.getMonth() + 1).padStart(2, '0') + String(today.getDate()).padStart(2, '0');
+        return [...new Set(approvedList.map(item => item.srisId || item.sris_id).filter(id => id))];
+    } catch (e) {
+        return { error: true };
+    }
+}
 
-        const findValueDeep = (obj, targetKeys) => {
-            let result = null;
-            const keys = Array.isArray(targetKeys) ? targetKeys : [targetKeys];
-            const search = (curr) => {
-                if (result !== null || curr === null || typeof curr !== 'object') return;
-                for (let k in curr) {
-                    if (keys.includes(k) && curr[k] !== undefined && curr[k] !== null && curr[k] !== "") { 
-                        result = curr[k]; return; 
-                    }
-                    if (typeof curr[k] === 'object') search(curr[k]);
+// ==========================================
+// 🚀 주입용 백그라운드 스크립트 2: Chunk 단위 병렬 추출 엔진
+// ==========================================
+async function injectedParallelExcelExport(targetSrisIds) {
+    const csrf = document.querySelector("input[name='_csrf']")?.value;
+    if (!csrf) return { error: true };
+
+    let tsvOutput = "카테고리구분_메타\t서브카테고리구분(메타)\t시리즈ID\t콘텐츠메타유형\t계약처명(시리즈)\t시리즈유형\t영상유형\t서비스시작일시\tPPV판매가격\t콘텐츠상품명\tN스크린여부\t월정액상품명\n";
+    
+    const today = new Date();
+    const todayStr = today.getFullYear() + String(today.getMonth() + 1).padStart(2, '0') + String(today.getDate()).padStart(2, '0');
+
+    const findValueDeep = (obj, targetKeys) => {
+        let result = null;
+        const keys = Array.isArray(targetKeys) ? targetKeys : [targetKeys];
+        const search = (curr) => {
+            if (result !== null || curr === null || typeof curr !== 'object') return;
+            for (let k in curr) {
+                if (keys.includes(k) && curr[k] !== undefined && curr[k] !== null && curr[k] !== "") { 
+                    result = curr[k]; return; 
                 }
-            };
-            search(obj);
-            return result;
+                if (typeof curr[k] === 'object') search(curr[k]);
+            }
         };
+        search(obj); return result;
+    };
 
-        for (const srisId of targetSrisIds) {
+    // 💡 병목 해소를 위해 Promise.all 활용 (한 번에 5개씩 묶어서 병렬 호출)
+    const CHUNK_SIZE = 5;
+    let extractedRows = [];
+
+    for (let i = 0; i < targetSrisIds.length; i += CHUNK_SIZE) {
+        const chunkIds = targetSrisIds.slice(i, i + CHUNK_SIZE);
+        
+        // 5개 단위로 동시 파싱 진행!
+        const chunkResults = await Promise.all(chunkIds.map(async (srisId) => {
+            let rowStrings = [];
             try {
                 let detail = await $.post('/contents/season/seasonSelect.json', { srisId, _csrf: csrf }).catch(()=>null);
                 let isSeason = !!(detail?.result?.seasonInfo?.metaTypNm || detail?.seasonInfo?.metaTypNm);
@@ -1585,16 +1647,25 @@ async function injectedDateRangeExport(startDt, endDt) {
                 if (priceSet.size === 0) priceSet.add("-");
                 let ppmString = ppmSet.size > 0 ? Array.from(ppmSet).join(", ") : "-";
 
+                // 배열로 행(Row) 데이터를 조립하여 리턴
                 priceSet.forEach(price => {
-                    tsvOutput += [
+                    rowStrings.push([
                         parCdNm, catCdNm, srisId, metaTypNm, cpNm, seriesType, svcTypNm,
                         svcFrDt, price, srisNm, nscrnYn, ppmString
-                    ].join("\t") + "\n";
+                    ].join("\t"));
                 });
+
             } catch (err) {}
-        }
-        return { data: tsvOutput, count: targetSrisIds.length };
-    } catch (e) {
-        return { error: true, msg: e.message };
+            return rowStrings;
+        }));
+        
+        // 5개씩 파싱 완료된 결과들을 원본 배열에 결합
+        chunkResults.forEach(rows => {
+            if(rows.length > 0) extractedRows.push(...rows);
+        });
     }
+
+    if(extractedRows.length > 0) tsvOutput += extractedRows.join("\n") + "\n";
+    
+    return { data: tsvOutput };
 }
