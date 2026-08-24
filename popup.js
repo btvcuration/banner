@@ -1514,7 +1514,7 @@ document.getElementById('runExcelBtn')?.addEventListener('click', () => {
 
 
 // ==========================================
-// 🚀 주입용 백그라운드 스크립트 1: 대상 검색만 빠르게 수행 (날짜 정밀 필터링 적용)
+// 🚀 주입용 백그라운드 스크립트 1: 대상 검색만 빠르게 수행 (일반 VOD 전용)
 // ==========================================
 async function injectedSearchExcelTargets(startDt, endDt) {
     const csrf = document.querySelector("input[name='_csrf']")?.value;
@@ -1530,14 +1530,22 @@ async function injectedSearchExcelTargets(startDt, endDt) {
         let uniqueMap = new Map();
 
         [...tList, ...sList].forEach(item => {
+            // 💡 1. 미배포 상태 걸러내기
             let tvStatus = item.tvStatus || item.tv_status || "";
             let tvMdaStatus = item.tvMdaStatus || item.tv_mda_status || "";
             let isApproved = tvStatus.includes("배포승인") || tvMdaStatus.includes("배포승인");
 
+            // 💡 2. 편성일자 정밀 필터링
             let rawSvcFrDt = (item.svcFrDt || item.svc_fr_dt || "00000000").substring(0, 8);
             let isTargetDate = (rawSvcFrDt >= startDt && rawSvcFrDt <= endDt);
 
-            if (isApproved && isTargetDate) {
+            // 💡 3. 서비스 유형 '일반 VOD' 전용 필터링
+            let sTypNm = item.svcTypNm || item.svc_typ_nm || "";
+            let sTypCd = String(item.svcTypCd || item.svc_typ_cd || "");
+            let isGeneralVod = sTypNm.includes("일반 VOD") || sTypCd === "30"; // 30은 일반 VOD 코드
+
+            // 세 가지 조건을 모두 만족하는 진짜 데이터만 취합!
+            if (isApproved && isTargetDate && isGeneralVod) {
                 let id = item.srisId || item.sris_id;
                 // 중복 방지 및 객체 생성
                 if (id && !uniqueMap.has(id)) {
