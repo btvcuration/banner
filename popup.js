@@ -81,18 +81,27 @@ function initTabs() {
             if(activeBox) renderDayList(activeBox.dataset.date);
         });
     });
+    // 엑셀 추출 탭 달력 기본값 세팅 (로컬 타임존 기준)
     let today = new Date();
     let pastWeek = new Date();
     pastWeek.setDate(today.getDate() - 7);
+    
+    // 💡 국제 표준시(UTC)가 아닌 한국 시간 기준으로 YYYY-MM-DD 포맷팅
+    const getLocalDateStr = (dateObj) => {
+        let y = dateObj.getFullYear();
+        let m = String(dateObj.getMonth() + 1).padStart(2, '0');
+        let d = String(dateObj.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
     
     let startEl = document.getElementById('exStartDt');
     let endEl = document.getElementById('exEndDt');
     
     if (startEl && endEl) {
-        startEl.value = pastWeek.toISOString().split('T')[0]; // 시작일: D-7
-        endEl.value = today.toISOString().split('T')[0];      // 종료일: 오늘
+        startEl.value = getLocalDateStr(pastWeek); // 시작일: D-7
+        endEl.value = getLocalDateStr(today);      // 종료일: 오늘
     }
-}
+} // <-- initTabs() 닫히는 괄호
 
 function injectScript(funcName, argsArray, callback) {
     getActiveTab(false).then(tab => {
